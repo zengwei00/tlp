@@ -1,3 +1,12 @@
+tlp (1.7.0.1-deepin3) stable; urgency=medium
+
+  * deepin: Improve deepin-system-power-control support:
+    - Add 3-level config (base/mode/override)
+    - Fix EPP setting via override@epp profile
+    - Files deployed to /etc/tlp.d/
+
+ -- xinpeng.wang <wangxinpeng@uniontech.com>  Wed, 24 Sep 2025 13:27:33 +0800
+
 tlp (1.7.0.1-deepin2) stable; urgency=medium
 
   * merge v20 patch.

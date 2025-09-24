@@ -15,7 +15,7 @@ Subject: [PATCH] test
 Index: tlp/Makefile
 ===================================================================
 --- tlp.orig/Makefile	2025-06-13 16:47:36.173894536 +0800
-+++ tlp/Makefile	2025-06-13 17:24:47.146599453 +0800
++++ tlp/Makefile	2025-09-24 12:29:57.629343863 +0800
 @@ -28,6 +28,7 @@
  TLP_META    ?= /usr/share/metainfo
  TLP_RUN     ?= /run/tlp
@@ -32,28 +32,16 @@ Index: tlp/Makefile
  
  SED = sed \
  	-e "s|@TLPVER@|$(TLPVER)|g" \
-@@ -143,6 +145,7 @@
- install-tlp: all
- 	# Package tlp
- 	install -D -m 755 tlp $(_SBIN)/tlp
-+	install -D -m 755 debian/deepin-system-power-control/deepin-system-power-control $(_SBIN)/deepin-system-power-control
- 	install -D -m 755 tlp-rf $(_BIN)/bluetooth
- 	ln -sf bluetooth $(_BIN)/nfc
- 	ln -sf bluetooth $(_BIN)/wifi
-@@ -156,8 +159,10 @@
+@@ -156,8 +158,6 @@
  	install -m 755 tlp-pcilist $(_TLIB)/
  	install -m 755 tlp-readconfs $(_TLIB)/
  	install -m 755 tlp-usblist $(_TLIB)/
 -	install -D -m 755 tlp-usb-udev $(_ULIB)/tlp-usb-udev
 -	install -D -m 644 tlp.rules $(_ULIB)/rules.d/85-tlp.rules
-+	install -D -m 755 debian/deepin-system-power-control/00-deepin-system-power-control_performance.conf $(_DEEPIN)/00-deepin-system-power-control_performance.conf
-+	install -D -m 755 debian/deepin-system-power-control/00-deepin-system-power-control_saving.conf $(_DEEPIN)/00-deepin-system-power-control_saving.conf
-+	install -D -m 755 debian/deepin-system-power-control/00-deepin-system-power-control_balance.conf $(_DEEPIN)/00-deepin-system-power-control_balance.conf
-+	install -D -m 755 debian/deepin-system-power-control/00-deepin-system-power-control_lowbat.conf $(_DEEPIN)/00-deepin-system-power-control_lowbat.conf
  	[ -f $(_CONFUSR) ] || install -D -m 644 tlp.conf $(_CONFUSR)
  	install -d $(_CONFDIR)
  	install -D -m 644 README.d $(_CONFDIR)/README
-@@ -170,10 +175,6 @@
+@@ -170,10 +170,6 @@
  endif
  ifneq ($(TLP_WITH_SYSTEMD),0)
  	install -D -m 644 tlp.service $(_SYSD)/tlp.service
@@ -64,10 +52,54 @@ Index: tlp/Makefile
  endif
  ifneq ($(TLP_NO_BASHCOMP),1)
  	install -D -m 644 completion/bash/tlp.bash_completion $(_SHCPL)/tlp
+@@ -220,6 +216,12 @@
+ 	install -D -m 644 completion/fish/tlp-rdw.fish $(_FISHCPL)/tlp-rdw.fish
+ endif
+ 
++install-dspc: all
++	install -D -m 755 debian/deepin-system-power-control/deepin-system-power-control $(_SBIN)/deepin-system-power-control
++	install -D -m 755 debian/deepin-system-power-control/00-dspc-base.conf $(_DEEPIN)/00-dspc-base.conf
++	install -D -m 755 debian/deepin-system-power-control/10-dspc-mode.conf $(_DEEPIN)/10-dspc-mode.conf
++	install -D -m 755 debian/deepin-system-power-control/20-dspc-override-mode@epp.conf $(_DEEPIN)/20-dspc-override-mode@epp.conf
++
+ install-man-tlp:
+ 	# manpages
+ 	install -d -m 755 $(_MAN)/man1
+@@ -232,7 +234,7 @@
+ 	install -d -m 755 $(_MAN)/man8
+ 	cd man-rdw && install -m 644 $(MANFILESRDW8) $(_MAN)/man8/
+ 
+-install: install-tlp install-rdw
++install: install-tlp install-rdw install-dspc
+ 
+ install-man: install-man-tlp install-man-rdw
+ 
+@@ -288,6 +290,12 @@
+ 	rm -f $(_ZSHCPL)/_tlp-rdw
+ 	rm -f $(_FISHCPL)/tlp-rdw.fish
+ 
++unistall-dspc:
++	rm $(_SBIN)/deepin-system-power-control
++	rm $(_DEEPIN)/00-dspc-base.conf
++	rm $(_DEEPIN)/10-dspc-mode.conf
++	rm $(_DEEPIN)/20-dspc-override-mode@epp.conf
++
+ uninstall-man-tlp:
+ 	# manpages
+ 	cd $(_MAN)/man1 && rm -f $(MANFILES1)
+@@ -297,7 +305,7 @@
+ 	# manpages
+ 	cd $(_MAN)/man8 && rm -f $(MANFILESRDW8)
+ 
+-uninstall: uninstall-tlp uninstall-rdw
++uninstall: uninstall-tlp uninstall-rdw uninstall-dspc
+ 
+ uninstall-man: uninstall-man-tlp uninstall-man-rdw
+ 
 Index: tlp/defaults.conf
 ===================================================================
 --- tlp.orig/defaults.conf	2025-06-13 16:47:36.173894536 +0800
-+++ tlp/defaults.conf	2025-06-13 17:29:17.784711044 +0800
++++ tlp/defaults.conf	2025-09-24 12:09:43.000000000 +0800
 @@ -19,8 +19,12 @@
  DISK_APM_LEVEL_ON_BAT="128 128"
  DISK_APM_CLASS_DENYLIST="usb ieee1394"
@@ -99,7 +131,7 @@ Index: tlp/defaults.conf
 Index: tlp/func.d/10-tlp-func-cpu
 ===================================================================
 --- tlp.orig/func.d/10-tlp-func-cpu	2025-06-13 16:47:36.173894536 +0800
-+++ tlp/func.d/10-tlp-func-cpu	2025-06-13 17:20:10.000000000 +0800
++++ tlp/func.d/10-tlp-func-cpu	2025-09-24 12:09:43.000000000 +0800
 @@ -125,35 +125,62 @@
  
  set_cpu_scaling_min_max_freq () {
@@ -179,7 +211,7 @@ Index: tlp/func.d/10-tlp-func-cpu
 Index: tlp/func.d/15-tlp-func-disk
 ===================================================================
 --- tlp.orig/func.d/15-tlp-func-disk	2025-06-13 16:47:36.177894708 +0800
-+++ tlp/func.d/15-tlp-func-disk	2025-06-13 17:20:10.000000000 +0800
++++ tlp/func.d/15-tlp-func-disk	2025-09-24 12:09:43.000000000 +0800
 @@ -628,6 +628,20 @@
      return 0
  }
@@ -204,7 +236,7 @@ Index: tlp/func.d/15-tlp-func-disk
 Index: tlp/tlp.in
 ===================================================================
 --- tlp.orig/tlp.in	2025-06-13 16:47:36.177894708 +0800
-+++ tlp/tlp.in	2025-06-13 17:20:10.000000000 +0800
++++ tlp/tlp.in	2025-09-24 12:09:43.000000000 +0800
 @@ -43,6 +43,7 @@
      set_wifi_power_mode "$1"
      disable_wake_on_lan
@@ -216,7 +248,7 @@ Index: tlp/tlp.in
 Index: tlp/tlp.service.in
 ===================================================================
 --- tlp.orig/tlp.service.in	2025-06-13 16:47:36.177894708 +0800
-+++ tlp/tlp.service.in	2025-06-13 17:20:10.000000000 +0800
++++ tlp/tlp.service.in	2025-09-24 12:09:43.000000000 +0800
 @@ -15,6 +15,3 @@
  ExecStart=@TLP_SBIN@/tlp init start
  ExecReload=@TLP_SBIN@/tlp start

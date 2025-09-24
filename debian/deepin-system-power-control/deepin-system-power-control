@@ -1,121 +1,351 @@
 #!/bin/bash
+# Deepin System Power Control - Dynamic TLP Mode Manager
+# Processes configuration files and applies mode-specific settings.
+
 set -euo pipefail
 
-# Constant definitions
+# ==============================================================================
+# Constants
+# ==============================================================================
+
 readonly TLP_DIR="/usr/share/tlp/deepin-system-power-control"
 readonly TLP_CONFIG="/etc/tlp.d"
+readonly SCRIPT_NAME="deepin-system-power-control"
+
 readonly VALID_MODES=("performance" "saving" "balance" "lowbat")
-readonly VALID_COMMANDS=("set" "init-start")  # Added valid commands
+readonly VALID_COMMANDS=("set" "init-start")
 
-# Color definitions
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly NC='\033[0m'
+# ==============================================================================
+# Global Variables
+# ==============================================================================
 
-# Display help message
+DEBUG=false  # Default: don't show debug logs
+
+# ==============================================================================
+# Logging Functions
+# ==============================================================================
+
+# Get current timestamp: YYYY-MM-DD HH:MM:SS
+_timestamp() {
+    date '+%Y-%m-%d %H:%M:%S'
+}
+
+# Log debug message (only if DEBUG is true)
+log_debug() {
+    if [[ "$DEBUG" == "true" ]]; then
+        printf '%s [%s] %s\n' "$(_timestamp)" "DEBUG" "$*" >&2
+    fi
+}
+
+# Log error message (always shown)
+log_error() {
+    printf '%s [%s] %s\n' "$(_timestamp)" "ERROR" "$*" >&2
+}
+
+# Log info message (always shown)
+log_info() {
+    printf '%s [%s] %s\n' "$(_timestamp)" "INFO" "$*" >&2
+}
+
+# ==============================================================================
+# Utility Functions (Updated)
+# ==============================================================================
+
 usage() {
     cat <<EOF
-Usage: $0 <command> [options]
+Usage: $0 [-d] <command> [options]
+
+Options:
+  -d                Enable debug logging
 
 Commands:
-  set <mode>      Set power mode
+  set <mode>        Set power mode
     Modes: ${VALID_MODES[*]}
-  
-  init-start      Directly start TLP service
+
+  init-start        Start TLP service without changing config
 
 Examples:
   $0 set performance
+  $0 -d set performance    # with debug output
   $0 init-start
 EOF
 }
 
-# Check root privileges
 check_root() {
-    [[ "$(id -u)" == "0" ]] || {
-        echo -e "${RED}Error: Missing root privileges${NC}" >&2
+    if [[ "$(id -u)" != "0" ]]; then
+        log_error "This script requires root privileges"
         exit 1
-    }
+    fi
 }
 
-# Validate command legality (independent argument logic)
 validate_command() {
     local cmd="$1"
-    
-    # Validate the first argument
-    printf '%s\n' "${VALID_COMMANDS[@]}" | grep -qx "$cmd" || {
-        echo -e "${RED}Error: Invalid command. Valid commands: ${VALID_COMMANDS[*]}${NC}" >&2
+    if ! printf '%s\n' "${VALID_COMMANDS[@]}" | grep -qx "$cmd"; then
+        log_error "Invalid command. Supported: ${VALID_COMMANDS[*]}"
         usage
         exit 1
-    }
+    fi
 }
 
-# Validate arguments for 'set' command
-validate_set_arguments() {
+validate_mode() {
     local mode="$1"
-    
-    # Validate mode argument
-    printf '%s\n' "${VALID_MODES[@]}" | grep -qx "$mode" || {
-        echo -e "${RED}Error: Invalid mode. Valid modes: ${VALID_MODES[*]}${NC}" >&2
+    if ! printf '%s\n' "${VALID_MODES[@]}" | grep -qx "$mode"; then
+        log_error "Invalid mode. Supported: ${VALID_MODES[*]}"
         usage
         exit 1
-    }
+    fi
 }
 
-# Cleanup old configurations
+# Checks if CPU supports EPP (Energy Performance Preference)
+check_epp() {
+    local INTEL_PSTATED="/sys/devices/system/cpu/intel_pstate"
+    local AMD_PSTATED="/sys/devices/system/cpu/amd_pstate"
+    local CPU_INFO="/proc/cpuinfo"
+
+    if [[ -f "/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_available_preferences" ]]; then
+        return 0
+    fi
+
+    if [[ -d "$INTEL_PSTATED" ]]; then
+        if grep -q -m1 'hwp_epp' "$CPU_INFO" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    if [[ -d "$AMD_PSTATED" ]]; then
+        if [[ "$(cat "$AMD_PSTATED/status" 2>/dev/null)" == "active" ]]; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Extracts configuration under a specific section from an INI-style file
+extract_section() {
+    local file="$1"
+    local section="$2"
+    local in_section=0
+    local in_header=1
+
+    while IFS= read -r line; do
+        # If currently in header (before any section), check if this line is a section header
+        if [[ $in_header -eq 1 ]] && [[ "$line" =~ ^\[.*\][[:space:]]*(#.*)?$ ]]; then
+            in_header=0
+        fi
+
+        # Output the line if still in header (e.g. comments, blank lines, etc.)
+        if [ $in_header -eq 1 ]; then
+            echo "$line"
+            continue
+        fi
+
+        # Skip empty lines and comments (including indented ones)
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Match section header with optional trailing whitespace/comments
+        if [[ "$line" =~ ^\[${section}\][[:space:]]*(#.*)?$ ]]; then
+            in_section=1
+            log_debug "Entered section [$section]"
+            continue
+        fi
+
+        # If already in section and encounter a new section header, exit
+        if [[ "$line" =~ ^\[.*\][[:space:]]*(#.*)?$ ]] && [[ $in_section -eq 1 ]]; then
+            log_debug "Exited section (new section: $line)"
+            break
+        fi
+
+        # Output key=value lines inside the section
+        if [[ $in_section -eq 1 && "$line" == *"="* ]]; then
+            echo "$line"
+        fi
+    done < "$file"
+}
+
+# Removes old configuration files generated by this script
 cleanup_old_configs() {
-    echo -e "${YELLOW}Cleaning old configs...${NC}"
-    find "${TLP_CONFIG}" -maxdepth 1 -name '*-deepin-system-power-control*.conf' -delete
+    log_info "Cleaning up old configs..."
+    find "${TLP_CONFIG}" -maxdepth 1 -name "*-dspc-*.conf" -delete 2>/dev/null || true
 }
 
-# Apply power mode
-apply_mode() {
+# Removes old style configuration files generated by this script
+cleanup_old_style_configs() {
+    log_info "Cleaning up old style configs..."
+    find "${TLP_CONFIG}" -maxdepth 1 -name "*-deepin-system-power-control*.conf" -delete 2>/dev/null || true
+}
+
+# ==============================================================================
+# Config Processing Functions (Updated)
+# ==============================================================================
+
+# Processes base config: copy directly
+process_base_config() {
+    local source_file="$1"
+    local filename="$2"
+    local dest_file="${TLP_CONFIG}/${filename}"
+
+    cp "$source_file" "$dest_file"
+    log_info "Copied base config: $filename -> $dest_file"
+}
+
+# Processes mode config: replace 'mode' with actual mode, extract section
+process_mode_config() {
+    local source_file="$1"
+    local filename="$2"
+    local mode="$3"
+
+    local dest_filename="${filename/-mode/-${mode}}"
+    local dest_file="${TLP_CONFIG}/${dest_filename}"
+
+    log_debug "Processing mode config: $filename -> $dest_filename [mode=$mode]"
+
+    # Step 1: Capture the extracted content
+    local content
+    content=$(extract_section "$source_file" "$mode")
+
+    # Step 2: Only write file if content is non-empty
+    if [[ -n "$content" ]]; then
+        printf '%s\n' "$content" > "$dest_file"
+        log_info "Generated: $dest_file"
+    else
+        log_debug "Skipped (no content): $dest_filename"
+    fi
+}
+
+# Processes override config: check condition, then process base or mode
+process_override_config() {
+    local source_file="$1"
+    local filename="$2"
+    local mode="$3"
+
+    local feature="${filename##*@}"
+    feature="${feature%.conf}"
+
+    local should_apply=false
+
+    case "$feature" in
+        "epp")
+            if check_epp; then
+                should_apply=true
+                log_debug "EPP supported, enabling override: $filename"
+            else
+                log_debug "EPP not supported, skipping: $filename"
+            fi
+            ;;
+        *)
+            log_error "Unknown override feature: $feature"
+            ;;
+    esac
+
+    if [[ "$should_apply" != "true" ]]; then
+        return  # Skip if condition not met
+    fi
+
+    # Replace @feature with -feature, and mode with actual mode
+    local dest_filename="${filename//-mode/-$mode}"
+    dest_filename="${dest_filename//@${feature}/-${feature}}"
+    local dest_file="${TLP_CONFIG}/${dest_filename}"
+
+    if [[ "$filename" == *"-override-base"* ]]; then
+        cp "$source_file" "$dest_file"
+        log_info "Applied override base: $dest_filename -> $dest_file"
+    elif [[ "$filename" == *"-override-mode"* ]]; then
+        local content
+        content=$(extract_section "$source_file" "$mode")
+        if [[ -n "$content" ]]; then
+            printf '%s\n' "$content" > "$dest_file"
+            log_info "Generated: $dest_file"
+        else
+            log_debug "Skipped (no content): $dest_filename"
+        fi
+    fi
+}
+
+# Main function: processes all configuration files
+process_configs() {
     local mode="$1"
-    local pattern="*${mode}.conf"
+    log_info "Processing configuration files for mode: $mode..."
 
-    echo -e "${YELLOW}Applying ${mode} configs...${NC}"
-    
-    # Copy configuration files
-    while IFS= read -r -d $'\0' conf; do
-        cp -fv "$conf" "${TLP_CONFIG}/" || {
-            echo -e "${RED}Error: Failed to copy $conf${NC}" >&2
-            exit 1
-        }
-    done < <(find "${TLP_DIR}" -type f -name "$pattern" -print0)
+    cleanup_old_configs
+
+    local config_file
+    while IFS= read -r -d '' config_file; do
+        local filename
+        filename=$(basename "$config_file")
+
+        # Skip files that don't contain '-dspc-' as a standalone component
+        if [[ ! "$filename" == *-dspc-* ]]; then
+            continue
+        fi
+
+        case "$filename" in
+            *-override-mode@*.conf | *-override-base@*.conf)
+                process_override_config "$config_file" "$filename" "$mode"
+                ;;
+            *-base.conf)
+                process_base_config "$config_file" "$filename"
+                ;;
+            *-mode.conf)
+                process_mode_config "$config_file" "$filename" "$mode"
+                ;;
+            *)
+                log_error "Unrecognized dspc config pattern: $filename"
+                ;;
+        esac
+    done < <(find "${TLP_DIR}" -name "*.conf" -print0)
+
+    log_info "Success: Configuration processed for mode '$mode'"
 }
 
-# Directly start TLP service
+# ==============================================================================
+# Main Function
+# ==============================================================================
+
 run_init_start() {
-    echo -e "${YELLOW}Starting TLP service...${NC}"
+    log_info "Starting TLP service..."
     tlp init start || {
-        echo -e "${RED}Error: tlp init failed${NC}" >&2
+        log_error "tlp init start failed"
         exit 1
     }
-    echo -e "${GREEN}Success: TLP service started${NC}"
+    log_info "Success: TLP service started"
 }
 
-# Main function
 main() {
+    # Parse -d flag
+    while [[ $# -gt 0 && "$1" == "-d" ]]; do
+        DEBUG=true
+        shift
+    done
+
+    # Check if any args left
+    if [[ $# -eq 0 ]]; then
+        log_error "No command provided"
+        usage
+        exit 1
+    fi
+
     check_root
-    validate_command "${1:-}"  # Validate first argument
+    validate_command "$1"
+    cleanup_old_style_configs
 
     case "$1" in
         "set")
-            # Validate argument count
-            [[ "$#" -ge 2 ]] || { usage; exit 1; }
-            validate_set_arguments "$2"
-            
-            cleanup_old_configs
-            apply_mode "$2"
-            run_init_start  # Auto-start after applying config
-            ;;
-        "init-start")
-            # Standalone command, no arguments
-            [[ "$#" -eq 1 ]] || {
-                echo -e "${RED}Error: 'init-start' command takes no arguments${NC}" >&2
+            if [[ "$#" -lt 2 ]]; then
+                log_error "'set' command requires a mode"
                 usage
                 exit 1
-            }
+            fi
+            validate_mode "$2"
+            process_configs "$2"
+            run_init_start
+            ;;
+        "init-start")
+            if [[ "$#" -gt 1 ]]; then
+                log_error "'init-start' takes no arguments"
+                usage
+                exit 1
+            fi
             run_init_start
             ;;
         *)
@@ -125,5 +355,5 @@ main() {
     esac
 }
 
-# Script entry point
+# Entry point
 main "$@"

@@ -42,7 +42,6 @@ usr/share/tlp/tlp-readconfs
 usr/share/tlp/tlp-usblist
 usr/share/metainfo/de.linrunner.tlp.metainfo.xml
 var/lib/tlp
-usr/share/tlp/deepin-system-power-control/00-deepin-system-power-control_balance.conf
-usr/share/tlp/deepin-system-power-control/00-deepin-system-power-control_lowbat.conf
-usr/share/tlp/deepin-system-power-control/00-deepin-system-power-control_performance.conf
-usr/share/tlp/deepin-system-power-control/00-deepin-system-power-control_saving.conf
+usr/share/tlp/deepin-system-power-control/00-dspc-base.conf
+usr/share/tlp/deepin-system-power-control/10-dspc-mode.conf
+usr/share/tlp/deepin-system-power-control/20-dspc-override-mode@epp.conf
