@@ -1,3 +1,55 @@
++++ 1.8.0 --- 13.02.2025 +++
+
+  * Features since 1.8.0-beta.1
+    General:
+    - tlp.8 manpage: explain battery name command parameters
+    - tlp.conf: parameter qualifiers don't have to match battery names
+    Battery Care:
+    - bash completion: suggest stop threshold as target level for tlp discharge
+
+  * Bugfixes since 1.8.0-beta.1
+    Battery Care:
+    - Dell: point to BIOS Admin password as cause of a threshold write error
+      (Issue #785)
+
++++ 1.8.0-beta.1 --- 19.01.2025 +++
+
+  * Beta Release
+
+  * Features
+    Battery Care:
+    - Chromebooks modded with chrultrabook/coreboot custom UEFI firmware
+      running kernel 6.12.8 (or later): stop threshold, recalibration;
+      latest Chromebooks with EC firmware v3 also support a start threshold
+      (Issue #765)
+    - Dell laptops with kernel 6.12 (or later): start and stop threshold
+      (Issue #379)
+    - Framework laptops with kernel 6.12.8 (or later): stop threshold,
+      recalibration (Issue #765)
+    - ThinkPads:
+      - tlp discharge to a target percentage
+      - Discharge code refactored, messages improved
+    - tlp chargeonce: better explain the process in the output
+    Diagnostic:
+    - tlp-stat --psup: add readings
+    Graphics:
+    - AMDGPU_ABM_LEVEL_ON_AC/BAT: write only when a change is made
+      to avoid unnecessary screen flickering
+    - RADEON_POWER_PROFILE_ON_AC/BAT: *DEPRECATED* feature will be
+      removed in TLP 1.9
+    Processor:
+    - tlp-stat -p -v: show boost per core (amd-pstate needs kernel >= 6.11)
+
+  * Bugfixes
+    Operation:
+    - Use AC mode for desktop PCs if no power source can be detected
+      (Issue #768)
+    Processor:
+    - tlp-stat -t: discover all coretemp sensors
+    Radio Devices:
+    - RDW: if LAN gets disconnected in suspend, ensure wifi activation
+      upon resume
+
 +++ 1.7.0 --- 27.09.2024 +++
 
   * No changes since 1.7.0-beta.2
@@ -12,7 +64,7 @@
 
   * Bugfixes since 1.7.0-beta.1
     Battery:
-    - Thinkpads:
+    - ThinkPads:
       - Fix premature abort of discharge/recalibrate for *20 models
         (Issue #759)
       - Fix ThinkPad X13s ARM power source detection (Issue #758)
@@ -495,7 +547,7 @@
           1. Intrinsic defaults
           2. /etc/tlp.d/*.conf - Drop-in customization snippets
           3. /etc/tlp.conf     - User configuration
-        In case of identical parameters, the last occurence has precedence
+        In case of identical parameters, the last occurrence has precedence
       - Parse config files instead of sourcing --> no more shell expansion
     Battery Features, tlp-stat -b:
       - Charge thresholds: better checks for command line and configuration;

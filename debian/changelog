@@ -1,23 +1,15 @@
-tlp (1.7.0.1-deepin3) stable; urgency=medium
+tlp (1.8.0-1) unstable; urgency=medium
 
-  * deepin: Improve deepin-system-power-control support:
-    - Add 3-level config (base/mode/override)
-    - Fix EPP setting via override@epp profile
-    - Files deployed to /etc/tlp.d/
+  * New upstream version 1.8.0
 
- -- xinpeng.wang <wangxinpeng@uniontech.com>  Wed, 24 Sep 2025 13:27:33 +0800
+  [ Thomas Koch ]
+  * [0a0203c] debian/copyright: update to 2025
+  * [f3fd34a] Update lintian overrides
 
-tlp (1.7.0.1-deepin2) stable; urgency=medium
+  [ Raphaël Halimi ]
+  * [7c216be] debian/watch: align with current debhelper template
 
-  * merge v20 patch.
-
- -- xinpeng.wang <wangxinpeng@uniontech.com>  Fri, 13 Jun 2025 17:39:17 +0800
-
-tlp (1.7.0.1-deepin1) stable; urgency=medium
-
-  * merge v20 patch.
-
- -- xinpeng.wang <wangxinpeng@uniontech.com>  Fri, 22 Nov 2024 15:33:19 +0800
+ -- Raphaël Halimi <raphael.halimi@gmail.com>  Thu, 13 Feb 2025 17:04:20 +0100
 
 tlp (1.7.0-1) unstable; urgency=medium
 

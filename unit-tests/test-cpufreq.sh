@@ -18,12 +18,13 @@
 # * intel_pstate
 # * intel_cpufreq
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # --- Constants
 readonly TESTLIB="./test-func"
 readonly TLP="tlp"
+readonly SUDO="sudo"
 
 readonly CPUD="/sys/devices/system/cpu"
 readonly CPU0="${CPUD}/cpu0"
@@ -55,7 +56,7 @@ check_cpu_driver_opmode () {
         case "$_cpu_driver" in
             amd?pstate?epp|amd?pstate)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial policy
                     opm_save="$(read_sysf "${AMDPSD}/status")"
@@ -72,8 +73,8 @@ check_cpu_driver_opmode () {
 
                     for opm in $opm_seq; do
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -87,7 +88,7 @@ check_cpu_driver_opmode () {
                         fi
                     done # opm
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # save current policy
@@ -100,8 +101,8 @@ check_cpu_driver_opmode () {
                         passive) opm="active" ;;
                     esac
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -121,7 +122,7 @@ check_cpu_driver_opmode () {
 
             intel_pstate)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial policy
                     opm_save="$(read_sysf "${INTELPSD}/status")"
@@ -137,8 +138,8 @@ check_cpu_driver_opmode () {
 
                     for opm in $opm_seq; do
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -152,7 +153,7 @@ check_cpu_driver_opmode () {
                         fi
                     done # opm
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # save current policy
@@ -164,8 +165,8 @@ check_cpu_driver_opmode () {
                         passive) opm="active" ;;
                     esac
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_AC="$opm" CPU_DRIVER_OPMODE_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_DRIVER_OPMODE_ON_BAT="$opm" CPU_DRIVER_OPMODE_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -219,7 +220,7 @@ check_cpu_scaling_governor () {
         case "$_cpu_driver" in
             amd?pstate|amd?pstate?epp|intel_pstate)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial governor
                     gov_save="$(read_sysf "${CPU0}/cpufreq/scaling_governor")"
@@ -234,8 +235,8 @@ check_cpu_scaling_governor () {
                     esac
                     for gov in $gov_seq; do
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -249,7 +250,7 @@ check_cpu_scaling_governor () {
                         fi
                     done
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # save current governor
@@ -261,8 +262,8 @@ check_cpu_scaling_governor () {
                         performance) gov="powersave" ;;
                     esac
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -282,7 +283,7 @@ check_cpu_scaling_governor () {
 
             acpi-cpufreq|apple-cpufreq|intel_cpufreq)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial governor
                     gov_save="$(read_sysf "${CPU0}/cpufreq/scaling_governor")"
@@ -300,8 +301,8 @@ check_cpu_scaling_governor () {
                     esac
                     for gov in $gov_seq; do
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -315,7 +316,7 @@ check_cpu_scaling_governor () {
                         fi
                     done
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # save current governor
@@ -327,8 +328,8 @@ check_cpu_scaling_governor () {
                         *)         gov="schedutil" ;;
                     esac
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_AC="$gov"  CPU_SCALING_GOVERNOR_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_SCALING_GOVERNOR_ON_BAT="$gov" CPU_SCALING_GOVERNOR_ON_AC=""  > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -383,7 +384,7 @@ check_cpu_scaling_freq () {
         case "$_cpu_driver" in
             amd?pstate|amd?pstate?epp|intel_pstate|acpi-cpufreq|apple-cpufreq|intel_cpufreq)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial frequencies
                     min_save="$(read_sysf "${CPU0}/cpufreq/scaling_min_freq")"
@@ -401,9 +402,9 @@ check_cpu_scaling_freq () {
                         max=$((max_save - 100000))
                     fi
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_AC="$min"  CPU_SCALING_MIN_FREQ_ON_BAT="" \
+                        AC)  ${SUDO} ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_AC="$min"  CPU_SCALING_MIN_FREQ_ON_BAT="" \
                                              CPU_SCALING_MAX_FREQ_ON_AC="$max"  CPU_SCALING_MAX_FREQ_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_BAT="$min" CPU_SCALING_MIN_FREQ_ON_AC=""  \
+                        BAT) ${SUDO} ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_BAT="$min" CPU_SCALING_MIN_FREQ_ON_AC=""  \
                                              CPU_SCALING_MAX_FREQ_ON_BAT="$max" CPU_SCALING_MAX_FREQ_ON_AC=""  > /dev/null 2>&1 ;;
                     esac
 
@@ -427,9 +428,9 @@ check_cpu_scaling_freq () {
 
                     # revert to initial frequencies
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_AC="$min_save"  CPU_SCALING_MIN_FREQ_ON_BAT="" \
+                        AC)  ${SUDO} ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_AC="$min_save"  CPU_SCALING_MIN_FREQ_ON_BAT="" \
                                              CPU_SCALING_MAX_FREQ_ON_AC="$max_save"  CPU_SCALING_MAX_FREQ_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_BAT="$min_save" CPU_SCALING_MIN_FREQ_ON_AC=""  \
+                        BAT) ${SUDO} ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_BAT="$min_save" CPU_SCALING_MIN_FREQ_ON_AC=""  \
                                              CPU_SCALING_MAX_FREQ_ON_BAT="$max_save" CPU_SCALING_MAX_FREQ_ON_AC=""  > /dev/null 2>&1 ;;
                     esac
 
@@ -451,14 +452,14 @@ check_cpu_scaling_freq () {
                         errcnt=$((errcnt + 1))
                     fi
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # try increased min, decreased max frequency again (from above)
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_AC="$min"  CPU_SCALING_MIN_FREQ_ON_BAT="" \
+                        AC)  ${SUDO} ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_AC="$min"  CPU_SCALING_MIN_FREQ_ON_BAT="" \
                                              CPU_SCALING_MAX_FREQ_ON_AC="$max"  CPU_SCALING_MAX_FREQ_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_BAT="$min" CPU_SCALING_MIN_FREQ_ON_AC=""  \
+                        BAT) ${SUDO} ${TLP} start -- CPU_SCALING_MIN_FREQ_ON_BAT="$min" CPU_SCALING_MIN_FREQ_ON_AC=""  \
                                              CPU_SCALING_MAX_FREQ_ON_BAT="$max" CPU_SCALING_MAX_FREQ_ON_AC=""  > /dev/null 2>&1 ;;
                     esac
 
@@ -522,7 +523,7 @@ check_cpu_epp () {
         case "$_cpu_driver" in
             amd?pstate?epp|intel_pstate|intel_cpufreq)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial policy
                     pol_save="$(read_sysf "${CPU0}/cpufreq/energy_performance_preference")"
@@ -540,8 +541,8 @@ check_cpu_epp () {
 
                     for pol in $pol_seq; do
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_AC="$pol" CPU_ENERGY_PERF_POLICY_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_BAT="$pol" CPU_ENERGY_PERF_POLICY_ON_AC="" > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_AC="$pol" CPU_ENERGY_PERF_POLICY_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_BAT="$pol" CPU_ENERGY_PERF_POLICY_ON_AC="" > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -555,7 +556,7 @@ check_cpu_epp () {
                         fi
                     done # pol
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # save current policy
@@ -569,8 +570,8 @@ check_cpu_epp () {
                         power)               pol="performance" ;;
                     esac
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_AC="$pol" CPU_ENERGY_PERF_POLICY_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_BAT="$pol" CPU_ENERGY_PERF_POLICY_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_AC="$pol" CPU_ENERGY_PERF_POLICY_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_ENERGY_PERF_POLICY_ON_BAT="$pol" CPU_ENERGY_PERF_POLICY_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -624,7 +625,7 @@ check_cpu_perf_pct () {
         case "$_cpu_driver" in
             intel_pstate|intel_cpufreq)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial performance
                     min_save="$(read_sysf "$INTELPSD/min_perf_pct")"
@@ -637,9 +638,9 @@ check_cpu_perf_pct () {
                     min=$((min_save + 10))
                     max=$((max_save - 10))
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_MIN_PERF_ON_AC="$min" CPU_MIN_PERF_ON_BAT="" \
+                        AC)  ${SUDO} ${TLP} start -- CPU_MIN_PERF_ON_AC="$min" CPU_MIN_PERF_ON_BAT="" \
                                              CPU_MAX_PERF_ON_AC="$max" CPU_MAX_PERF_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_MIN_PERF_ON_BAT="$min" CPU_MIN_PERF_ON_AC="" \
+                        BAT) ${SUDO} ${TLP} start -- CPU_MIN_PERF_ON_BAT="$min" CPU_MIN_PERF_ON_AC="" \
                                              CPU_MAX_PERF_ON_BAT="$max" CPU_MAX_PERF_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
@@ -663,9 +664,9 @@ check_cpu_perf_pct () {
 
                     # revert to initial min/max performance
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_MIN_PERF_ON_AC="$min_save" CPU_MIN_PERF_ON_BAT="" \
+                        AC)  ${SUDO} ${TLP} start -- CPU_MIN_PERF_ON_AC="$min_save" CPU_MIN_PERF_ON_BAT="" \
                                              CPU_MAX_PERF_ON_AC="$max_save" CPU_MAX_PERF_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_MIN_PERF_ON_BAT="$min_save" CPU_MIN_PERF_ON_AC="" \
+                        BAT) ${SUDO} ${TLP} start -- CPU_MIN_PERF_ON_BAT="$min_save" CPU_MIN_PERF_ON_AC="" \
                                              CPU_MAX_PERF_ON_BAT="$max_save" CPU_MAX_PERF_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
@@ -687,14 +688,14 @@ check_cpu_perf_pct () {
                         errcnt=$((errcnt + 1))
                     fi
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # try increased min, decreased max performance again (from above)
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_MIN_PERF_ON_AC="$min" CPU_MIN_PERF_ON_BAT="" \
+                        AC)  ${SUDO} ${TLP} start -- CPU_MIN_PERF_ON_AC="$min" CPU_MIN_PERF_ON_BAT="" \
                                              CPU_MAX_PERF_ON_AC="$max" CPU_MAX_PERF_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_MIN_PERF_ON_BAT="$min" CPU_MIN_PERF_ON_AC="" \
+                        BAT) ${SUDO} ${TLP} start -- CPU_MIN_PERF_ON_BAT="$min" CPU_MIN_PERF_ON_AC="" \
                                              CPU_MAX_PERF_ON_BAT="$max" CPU_MAX_PERF_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
@@ -759,7 +760,7 @@ check_cpu_boost () {
         case "$_cpu_driver" in
             intel_pstate|intel_cpufreq)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial states
                     no_turbo_save="$(read_sysf "$INTELPSD/no_turbo")"
@@ -777,8 +778,8 @@ check_cpu_boost () {
                     no_turbo="$((no_turbo_save ^ 1))"
                     # note: CPU_BOOST_ON_AC/BAT is the inverse of no_turbo
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_BOOST_ON_AC="$((no_turbo ^ 1))" CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_BOOST_ON_BAT="$((no_turbo ^ 1))" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_BOOST_ON_AC="$((no_turbo ^ 1))" CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_BOOST_ON_BAT="$((no_turbo ^ 1))" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # expect change
@@ -794,8 +795,8 @@ check_cpu_boost () {
                     # revert to initial turbo state
                     # note: CPU_BOOST_ON_AC/BAT is the inverse of no_turbo
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_BOOST_ON_AC="$((no_turbo_save ^ 1))" CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_BOOST_ON_BAT="$((no_turbo_save ^ 1))" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_BOOST_ON_AC="$((no_turbo_save ^ 1))" CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_BOOST_ON_BAT="$((no_turbo_save ^ 1))" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # expect change
@@ -812,8 +813,8 @@ check_cpu_boost () {
                         # invert dyn boost state
                         dyn_boost="$((dyn_boost_save ^ 1))"
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_HWP_DYN_BOOST_ON_AC="$dyn_boost"  CPU_HWP_DYN_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_HWP_DYN_BOOST_ON_BAT="$dyn_boost" CPU_HWP_DYN_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_HWP_DYN_BOOST_ON_AC="$dyn_boost"  CPU_HWP_DYN_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_HWP_DYN_BOOST_ON_BAT="$dyn_boost" CPU_HWP_DYN_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -828,8 +829,8 @@ check_cpu_boost () {
 
                         # revert to initial dyn boost state
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_HWP_DYN_BOOST_ON_AC="$dyn_boost_save"  CPU_HWP_DYN_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_HWP_DYN_BOOST_ON_BAT="$dyn_boost_save" CPU_HWP_DYN_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_HWP_DYN_BOOST_ON_AC="$dyn_boost_save"  CPU_HWP_DYN_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_HWP_DYN_BOOST_ON_BAT="$dyn_boost_save" CPU_HWP_DYN_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                         esac
 
                         # expect change
@@ -845,15 +846,15 @@ check_cpu_boost () {
                         printf_msg " dyn_boost/not-available"
                     fi
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # try to invert turbo state
                     no_turbo="$((no_turbo_save ^ 1))"
                     # note: CPU_BOOST_ON_AC/BAT is the inverse of no_turbo
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_BOOST_ON_AC="$((no_turbo ^ 1))"  CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_BOOST_ON_BAT="$((no_turbo ^ 1))" CPU_BOOST_ON_AC=""  > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_BOOST_ON_AC="$((no_turbo ^ 1))"  CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_BOOST_ON_BAT="$((no_turbo ^ 1))" CPU_BOOST_ON_AC=""  > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -870,8 +871,8 @@ check_cpu_boost () {
                         # try to invert dyn boost state
                         dyn_boost="$((dyn_boost_save ^ 1))"
                         case "$psfx" in
-                            AC)  ${TLP} start -- CPU_HWP_DYN_BOOST_ON_AC="$dyn_boost"  CPU_HWP_DYN_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                            BAT) ${TLP} start -- CPU_HWP_DYN_BOOST_ON_BAT="$dyn_boost" CPU_HWP_DYN_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                            AC)  ${SUDO} ${TLP} start -- CPU_HWP_DYN_BOOST_ON_AC="$dyn_boost"  CPU_HWP_DYN_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                            BAT) ${SUDO} ${TLP} start -- CPU_HWP_DYN_BOOST_ON_BAT="$dyn_boost" CPU_HWP_DYN_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                         esac
 
                         # do not expect change
@@ -895,7 +896,7 @@ check_cpu_boost () {
 
             acpi-cpufreq)
                 if [ $sc -eq 1 ]; then
-                    # power source matches parameter suffix
+                    # --- test settings profile for active power source
 
                     # save initial boost state
                     boost_save="$(read_sysf "${CPUD}/cpufreq/boost")"
@@ -906,8 +907,8 @@ check_cpu_boost () {
                     # invert boost state
                     boost="$((boost_save ^ 1))"
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_BOOST_ON_AC="$boost"  CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_BOOST_ON_BAT="$boost" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_BOOST_ON_AC="$boost"  CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_BOOST_ON_BAT="$boost" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # expect change
@@ -921,7 +922,7 @@ check_cpu_boost () {
                     fi
 
                     # revert to initial boost state
-                    ${TLP} start -- CPU_BOOST_ON_AC="$boost_save" CPU_BOOST_ON_BAT="$boost_save" > /dev/null 2>&1
+                    ${SUDO} ${TLP} start -- CPU_BOOST_ON_AC="$boost_save" CPU_BOOST_ON_BAT="$boost_save" > /dev/null 2>&1
                     compare_sysf "$boost_save" "${CPUD}/cpufreq/boost"
                     rc=$?
                     if [ "$rc" -eq 0 ]; then
@@ -931,14 +932,14 @@ check_cpu_boost () {
                         errcnt=$((errcnt + 1))
                     fi
                 else
-                    # power source does not match parameter suffix
+                    # --- test settings profile for inactive power source
                     printf_msg "\n %s(inactive):" "$psfx"
 
                     # try to invert boost state
                     boost="$((boost_save ^ 1))"
                     case "$psfx" in
-                        AC)  ${TLP} start -- CPU_BOOST_ON_AC="$boost"  CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- CPU_BOOST_ON_BAT="$boost" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- CPU_BOOST_ON_AC="$boost"  CPU_BOOST_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- CPU_BOOST_ON_BAT="$boost" CPU_BOOST_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # do not expect change
@@ -994,7 +995,7 @@ check_platform_profile () {
             sc=$((sc + 1))
 
             if [ $sc -eq 1 ]; then
-                # power source matches parameter suffix
+                # --- test settings profile for active power source
                 printf_msg " %s(active):" "$psfx"
 
                 # iterate policies supported by the driver
@@ -1002,8 +1003,8 @@ check_platform_profile () {
                 prof_list="$(echo "$prof_list" | sed -r 's/'"$prof_save"'//') $prof_save"
                 for prof in $prof_list; do
                     case "$psfx" in
-                        AC)  ${TLP} start -- PLATFORM_PROFILE_ON_AC="$prof" PLATFORM_PROFILE_ON_BAT="" > /dev/null 2>&1 ;;
-                        BAT) ${TLP} start -- PLATFORM_PROFILE_ON_BAT="$prof" PLATFORM_PROFILE_ON_AC="" > /dev/null 2>&1 ;;
+                        AC)  ${SUDO} ${TLP} start -- PLATFORM_PROFILE_ON_AC="$prof" PLATFORM_PROFILE_ON_BAT="" > /dev/null 2>&1 ;;
+                        BAT) ${SUDO} ${TLP} start -- PLATFORM_PROFILE_ON_BAT="$prof" PLATFORM_PROFILE_ON_AC="" > /dev/null 2>&1 ;;
                     esac
 
                     # expect change
@@ -1017,7 +1018,7 @@ check_platform_profile () {
                     fi
                 done # prof
             else
-                # power source does not match parameter suffix
+                # --- test settings profile for inactive power source
                 printf_msg "\n %s(inactive):" "$psfx"
 
                 # try different platform profile
@@ -1027,8 +1028,8 @@ check_platform_profile () {
                     performance) prof="low-power" ;;
                 esac
                 case "$psfx" in
-                    AC)  ${TLP} start -- PLATFORM_PROFILE_ON_AC="$prof" PLATFORM_PROFILE_ON_BAT="" > /dev/null 2>&1 ;;
-                    BAT) ${TLP} start -- PLATFORM_PROFILE_ON_BAT="$prof" PLATFORM_PROFILE_ON_AC="" > /dev/null 2>&1 ;;
+                    AC)  ${SUDO} ${TLP} start -- PLATFORM_PROFILE_ON_AC="$prof" PLATFORM_PROFILE_ON_BAT="" > /dev/null 2>&1 ;;
+                    BAT) ${SUDO} ${TLP} start -- PLATFORM_PROFILE_ON_BAT="$prof" PLATFORM_PROFILE_ON_AC="" > /dev/null 2>&1 ;;
                 esac
 
                 # do not expect change
@@ -1065,21 +1066,23 @@ check_platform_profile () {
 }
 
 # check prerequisites and initialize
-check_root
-cmd_exists "$TLP" || {
-    printf_msg "Error: %s not installed." "$TLP"
-    exit 254
-}
+check_tlp
 _cpu_driver=$(read_sysf "${CPU0}/cpufreq/scaling_driver") || {
     printf_msg "Error: could not determine cpu scaling driver."
     exit 128
 }
+cache_root_cred
+
+start_report
+
 # shellcheck disable=SC2034
 _basename="${0##*/}"
 # shellcheck disable=SC2034
 _logfile="$(date -Iseconds)_${_basename%.*}.log"
 _testcnt=0
 _failcnt=0
+
+report_test "$_basename"
 
 printf_msg "+++ %s --- cpu_driver: %s\n\n" "${0##*/}" "$_cpu_driver"
 
@@ -1092,7 +1095,9 @@ check_cpu_perf_pct
 check_cpu_boost
 check_platform_profile
 
-printf_msg "+++ Test results: %d run, %d failed.\n\n" "$_testcnt" "$_failcnt"
+report_result "$_testcnt" "$_failcnt"
+
+print_report
 
 # --- Exit
 exit $_failcnt

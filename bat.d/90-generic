@@ -2,7 +2,7 @@
 # 90-generic - Battery plugin catchall for laptops that either not provide
 # a kernel interface for battery care or TLP doesn't support it yet.
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Needs: tlp-func-base, 35-tlp-func-batt, tlp-func-stat
@@ -80,6 +80,11 @@ batdrv_write_thresholds () {
     return 255
 }
 
+batdrv_calc_soc () {
+    # function not implemented as not required
+    return 255
+}
+
 batdrv_chargeonce () {
     # function not implemented for generic hardware
     echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce.not_implemented"
@@ -114,6 +119,14 @@ batdrv_force_discharge_active () {
     # function not implemented for generic hardware
     echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge_active.not_implemented"
     return 255
+}
+
+batdrv_discharge_safetylock () {
+    # check safety lock - force-discharge not implemented for generic hardware
+    # $1: discharge/recalibrate
+    # rc: 0=engaged/1=disengaged
+
+    return 1
 }
 
 batdrv_discharge () {
@@ -203,6 +216,7 @@ batdrv_show_battery_data () { # output battery data
 
         printparm "%-59s = ##%6d## [%%]" "$_bd_read/charge_control_start_threshold" "not available"
         printparm "%-59s = ##%6d## [%%]" "$_bd_read/charge_control_end_threshold" "not available"
+        printparm "%-59s = ##%6s## [mV]" "$_bd_read/charge_behaviour" "not available"
         printf "\n"
 
         # charge + capacity

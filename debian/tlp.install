@@ -1,7 +1,11 @@
 etc/tlp.conf
 etc/tlp.d
 etc/init.d/tlp
+usr/lib/elogind/system-sleep/49-tlp-sleep
 usr/lib/systemd/system/tlp.service
+usr/lib/systemd/system-sleep/tlp
+usr/lib/udev/rules.d/85-tlp.rules
+usr/lib/udev/tlp-usb-udev
 usr/bin/bluetooth
 usr/bin/nfc
 usr/bin/run-on-ac
@@ -10,7 +14,6 @@ usr/bin/tlp-stat
 usr/bin/wifi
 usr/bin/wwan
 usr/sbin/tlp
-usr/sbin/deepin-system-power-control
 usr/share/bash-completion/completions/bluetooth
 usr/share/bash-completion/completions/nfc
 usr/share/bash-completion/completions/run-on-ac
@@ -42,6 +45,3 @@ usr/share/tlp/tlp-readconfs
 usr/share/tlp/tlp-usblist
 usr/share/metainfo/de.linrunner.tlp.metainfo.xml
 var/lib/tlp
-usr/share/tlp/deepin-system-power-control/00-dspc-base.conf
-usr/share/tlp/deepin-system-power-control/10-dspc-mode.conf
-usr/share/tlp/deepin-system-power-control/20-dspc-override-mode@epp.conf

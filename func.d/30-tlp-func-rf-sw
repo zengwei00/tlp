@@ -1,7 +1,7 @@
 #!/bin/sh
 # tlp-func-rf-sw - Radio Switch Functions
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Needs: tlp-func-base, tlp-func-rf
@@ -187,7 +187,7 @@ device_switch () { # switch radio type state
     if [ "$curst" = "$newst" ]; then
         # desired matches current state --> do nothing
         echo_debug "rf" "device_switch($1, $2).desired_state"
-
+        return 0
     else
         # desired does not match current state --> do switch
 

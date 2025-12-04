@@ -1,5 +1,5 @@
 # bash completion for TLP
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 _batteries() {
@@ -20,6 +20,15 @@ _batteries() {
     fi
 }
 
+_target_level() {
+    local threshf
+
+    threshf="/sys/class/power_supply/${COMP_WORDS[2]}/charge_control_end_threshold"
+    if [ -f "$threshf" ]; then
+        COMPREPLY=( $(compgen -W "$(cat "$threshf")" -- ${cur}) )
+    fi
+}
+
 _tlp() {
     local cur prev words cword opts bats
     _init_completion || return
@@ -35,11 +44,23 @@ _tlp() {
 
         2)
             case "${prev}" in
-                fullcharge|chargeonce|discharge|recalibrate)
+                fullcharge|chargeonce|recalibrate)
+                    _batteries
+                    return 0
+                    ;;
+
+                discharge)
                     _batteries
                     return 0
                     ;;
             esac
+            ;;
+
+        3)
+            if [ "${COMP_WORDS[1]}" = "discharge" ]; then
+                _target_level
+                return 0
+            fi
             ;;
 
         4)

@@ -1,7 +1,7 @@
 #!/bin/sh
 # tlp - Base Functions
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # shellcheck disable=SC2034
@@ -45,8 +45,8 @@ readonly TPACPID=/sys/devices/platform/thinkpad_acpi
 
 readonly RE_PARAM='^[A-Z_]+[0-9]*=[-0-9a-zA-Z _.:]*$'
 
-# power supplies: ignore MacBook Pro 2017 sbs-charger, hid devices, ThinkPad X13s ARM qcom-battmgr-ac
-readonly RE_PS_IGNORE='sbs-charger|hidpp_battery|hid-|qcom-battmgr-ac'
+# power supplies: ignore MacBook Pro 2017 sbs-charger, ThinkPad X13s ARM qcom-battmgr-ac, hid devices, game controllers
+readonly RE_PS_IGNORE='sbs-charger|qcom-battmgr-ac|hidpp_battery|hid-|controller-battery-|controller_battery_'
 
 readonly DEBUG_TAGS_ALL="arg bat cfg disk lock nm path pm ps rf run sysfs udev usb"
 
@@ -961,13 +961,22 @@ get_persist_mode () { # get persistent operation mode
     return $rc
 }
 
+is_laptop () { # check if machine is a laptop
+    # rc: 0=laptop/1=other/desktop
+    case "$(read_dmi "chassis_type")" in
+        8|9|10|11) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 get_power_mode () {
     # get current operation mode
     # $1: command
     # rc: 0=AC/1=battery
-    # similar to get_sys_power_supply(),
-    # but maps unknown power source to TLP_DEFAULT_MODE or returns
-    # persistent mode when enabled
+    # similar to get_sys_power_supply(), but maps unknown power source to TLP_DEFAULT_MODE
+    # or returns persistent mode when enabled.
+    # if TLP_DEFAULT_MODE is unconfigured and power source is unknown, returns
+    # 1=BAT for laptop/0=AC for desktop/other.
 
     get_sys_power_supply "$1"
     local rc=$?
@@ -982,7 +991,13 @@ get_power_mode () {
             case $(toupper "$TLP_DEFAULT_MODE") in
                 AC)  rc=0 ;;
                 BAT) rc=1 ;;
-                *)   rc=0 ;; # use AC if none or invalid mode
+                *) # unconfigured or invalid default mode -> check machine type
+                    if is_laptop; then
+                        rc=1 # laptop: assume BAT
+                    else
+                        rc=0 # desktop/other: assume AC
+                    fi
+                    ;;
             esac
         fi
     fi
@@ -1110,19 +1125,4 @@ get_manual_mode () { # get manual operation mode
         fi
     fi
     return $rc
-}
-
-# --- Misc Checks
-
-check_laptop_mode_tools () { # check if lmt installed -- rc: 0=not installed, 1=installed
-    if cmd_exists $LAPMODE; then
-        echo 1>&2
-        cecho "Warning: laptop-mode-tools detected, this may cause conflicts with TLP." 1>&2
-        echo  "Please uninstall laptop-mode-tools." 1>&2
-        echo 1>&2
-        echo_debug "pm" "check_laptop_mode_tools: yes"
-        return 1
-    else
-        return 0
-    fi
 }

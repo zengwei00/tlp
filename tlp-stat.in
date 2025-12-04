@@ -1,7 +1,7 @@
 #!/bin/sh
 # tlp-stat - display power saving details
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # --- Source libraries
@@ -203,7 +203,7 @@ parse_args () { # parse command-line -- $@: arguments to parse
                 echo "                  -t | --temp      | -u | --usb       |"
                 echo "                  -w | --warn      | -v | --verbose   |"
                 echo "                     | --version   |    | --cdiff     |"
-                echo "                     | --pev       | -P | --psup      |"
+                echo "                  -P | --pev       |    | --psup      |"
                 echo "                  -T | --trace     |    | --udev      |"
                 echo "                ]"
                 do_exit 3
@@ -359,9 +359,6 @@ if [ "$show_system" = "1" ] || [ "$show_all" = "1" ] ; then
         cprintf "" "Warning: TLP's power saving will not apply on boot because the conflicting $PPD_SERVICE is active.\n" 1>&2
         echo
     fi
-
-    # -- warning if l-m-t detected
-    check_laptop_mode_tools
 fi # show_system
 
 # --- show cpu info
@@ -426,6 +423,9 @@ if [ "$show_proc" = "1" ] || [ "$show_all" = "1" ]; then
                     fi
                     if [ -f "$cpuf/bios_limit" ]; then
                         printf "%-54s = %8d [kHz]\n" "$cpuf/bios_limit" "$(read_sysf "$cpuf/bios_limit")"
+                    fi
+                    if [ -f "$cpuf/boost" ] && [ $show_verbose -eq 1 ]; then
+                        printf "%-54s = %d\n" "$cpuf/boost" "$(read_sysf "$cpuf/boost")"
                     fi
 
                     if [ -f "$cpuf/energy_performance_preference" ]; then
@@ -556,7 +556,7 @@ if [ "$show_temp" = "1" ] || [ "$show_all" = "1" ]; then
         cmax=0
         # find max value of all CPU packages (just in case there are several)
         # temp1_input is "package"
-        for sens in $(glob_files '/temp1_input' "$CORETEMP_GLOB"); do
+        for sens in $(glob_files '/temp?_input' "$CORETEMP_GLOB"); do
             ctemp=$(read_sysval "$sens")
             [ "$ctemp" -gt "$cmax" ] && cmax=$ctemp
         done
@@ -972,17 +972,28 @@ if [ "$show_psup" = "1" ]; then
     printf "+++ Power supply diagnostic\n"
     for ps in /sys/class/power_supply/*; do
         # shellcheck disable=SC2063
-        printparm "%s: ##%s##" "$ps/type"
-        printparm "%s: ##%s##" "$ps/usb_type"
-        printparm "%s: ##%s##" "$ps/online"
-        printparm "%s: ##%s##" "$ps/voltage_max"
-        printparm "%s: ##%s##" "$ps/voltage_min"
-        printparm "%s: ##%s##" "$ps/voltage_now"
-        printparm "%s: ##%s##" "$ps/present"
-        printparm "%s: ##%s##" "$ps/charge_control_start_threshold"
-        printparm "%s: ##%s##" "$ps/charge_control_end_threshold"
-        printparm "%s: ##%s##" "$ps/status"
-        printparm "%s: ##%s##" "$ps/device/path"
+        printparm "%s: ##%s##" "$ps/type" _
+        printparm "%s: ##%s##" "$ps/usb_type" _
+        printparm "%s: ##%s##" "$ps/present" _
+        printparm "%s: ##%s##" "$ps/online" _
+        printparm "%s: ##%s##" "$ps/capacity" _
+        printparm "%s: ##%s##" "$ps/charge_full_design" _
+        printparm "%s: ##%s##" "$ps/charge_full" _
+        printparm "%s: ##%s##" "$ps/charge_now" _
+        printparm "%s: ##%s##" "$ps/current_now" _
+        printparm "%s: ##%s##" "$ps/energy_full_design" _
+        printparm "%s: ##%s##" "$ps/energy_full" _
+        printparm "%s: ##%s##" "$ps/energy_now" _
+        printparm "%s: ##%s##" "$ps/power_now" _
+        printparm "%s: ##%s##" "$ps/voltage_max" _
+        printparm "%s: ##%s##" "$ps/voltage_min" _
+        printparm "%s: ##%s##" "$ps/voltage_now" _
+        printparm "%s: ##%s##" "$ps/charge_control_start_threshold" _
+        printparm "%s: ##%s##" "$ps/charge_control_end_threshold" _
+        printparm "%s: ##%s##" "$ps/charge_behaviour" _
+        printparm "%s: ##%s##" "$ps/charge_types" _
+        printparm "%s: ##%s##" "$ps/status" _
+        printparm "%s: ##%s##" "$ps/device/path" _
     done
     printf "\n+++ udev diagnostic\n"
     check_udev_rule_ps

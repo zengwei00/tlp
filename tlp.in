@@ -1,7 +1,7 @@
 #!/bin/sh
 # tlp - adjust power settings
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # --- Source libraries
@@ -92,11 +92,18 @@ parse_args () { # parse command-line arguments
                     _carg3=""
                     ;;
 
-                chargeonce|discharge|fullcharge|recalibrate)
+                chargeonce|fullcharge|recalibrate)
                     # commands with one or no arguments
                     _cmd="$1"
                     _cmd2=""
                     _carg2=""
+                    _carg3=""
+                    ;;
+
+                discharge)
+                    # command with up to two arguments
+                    _cmd="$1"
+                    _cmd2=""
                     _carg3=""
                     ;;
 
@@ -199,8 +206,6 @@ cprintf_init
 
 check_tlp_enabled 1 || do_exit 1
 add_sbin2path
-
-check_laptop_mode_tools
 
 if [ -z "$_cmd2" ]; then
     echo_debug "run" "+++ $_cmd ($TLPVER) ++++++++++++++++++++++++++++++++++++++++"
@@ -488,7 +493,7 @@ case "$_cmd" in
             setcharge_battery DEF DEF $_carg1
             exitcode=$?
             if [ $exitcode -eq 0 ]; then
-                echo "Charging starts now, keep AC connected." 1>&2
+                cecho "Charging starts now, keep AC connected." "notice" 1>&2
             fi
         else
             exitcode=2
@@ -498,57 +503,22 @@ case "$_cmd" in
     chargeonce) # charge battery to stop threshold once
         if check_ac_power chargeonce; then
             check_root
-            # quoting args will break $# in chargeonce_battery()
             # shellcheck disable=SC2086
-            chargeonce_battery $_carg1
+            chargeonce_battery "$_carg1"
             exitcode=$?
-            if [ $exitcode -eq 0 ]; then
-                echo "Charging starts now, keep AC connected." 1>&2
-            fi
         else
             exitcode=2
         fi
         ;;
 
-    discharge) # discharge battery completely (to recalibrate)
-        if check_ac_power discharge; then
-            check_root
-            if lock_tlp_nb tlp_discharge; then
-                # quoting args will break $# in discharge_battery()
-                # shellcheck disable=SC2086
-                discharge_battery $_carg1
-                exitcode=$?
-            else
-                echo_discharge_locked
-            fi
-        else
-            exitcode=2
-        fi
+    discharge) # discharge battery to target soc or completely
+        discharge_battery discharge "$_carg1" "$_carg2"
+        exitcode=$?
         ;;
 
-    recalibrate) # recalibrate battery, i.e. discharge and charge to 100%
-        if check_ac_power recalibrate; then
-            check_root
-            if lock_tlp_nb tlp_discharge; then
-                if setcharge_battery DEF DEF "$_carg1" "/discharge/recalibrate"; then
-                    sleep 1
-                    # quoting args will break $# in discharge_battery()
-                    # shellcheck disable=SC2086
-                    discharge_battery $_carg1
-                    exitcode=$?
-                    if [ $exitcode -eq 0 ]; then
-                        echo "Charging starts now, for a complete recalibration" 1>&2
-                        echo "keep AC connected until the battery is fully charged." 1>&2
-                    else
-                        echo "Battery recalibration aborted." 1>&2
-                    fi
-                fi
-            else
-                echo_discharge_locked
-            fi
-        else
-            exitcode=2
-        fi
+    recalibrate) # recalibrate battery, i.e. discharge completely and charge to 100%
+        discharge_battery recalibrate "$_carg1"
+        exitcode=$?
         ;;
 
     diskid) # show disk id's

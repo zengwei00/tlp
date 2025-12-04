@@ -2,7 +2,7 @@
 # tlp-rdw - network manager dispatcher hook:
 #           enable/disable radios on ifup/ifdown
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # --- Source libraries
@@ -19,7 +19,7 @@ check_switch_lock() { # switch listed radio devices
     # $1: device type where the event originated -- do nothing if its time-locked
     # $2: list of device types to switch
     # $3: on/off
-    local type
+    local sw_rc type
 
     # quit if the originating *radio* device is time-locked (not LAN)
     [ "$1" != "LAN" ] && check_timed_lock "${RDW_NM_LOCK}_$1" && return 1
@@ -28,7 +28,23 @@ check_switch_lock() { # switch listed radio devices
         if [ -n "$type" ] && [ "$type" != "$1" ]; then
             # device type is valid and not the originating one
             # --> do switch with state change lock
-            device_switch "$type" "$3" "${RDW_NM_LOCK}_${type}" "$RDW_NM_LOCKTIME"
+            device_switch "$type" "$3" "${RDW_NM_LOCK}_${type}" "$RDW_NM_LOCKTIME"; sw_rc=$?
+
+            if [ "$sw_rc" = "4" ]; then
+                # switch failed, NetworkManager may be "asleep" -> schedule repeat:
+                # open a detached subshell, wait 2 secs and respawn ourselves,
+                # no more than two repetitions.
+                case "$repeats" in
+                    "") repeats="2" ;;
+                    2)  repeats="1" ;;
+                    *)  repeats=""  ;;
+                esac
+                if [ -n "$repeats" ]; then
+                    echo_debug "nm" "+++ tlp_rdw_nm(${iface}).${action}.nm_seems_asleep: repeats=$repeats"
+                    ( sleep 2; $0 "$iface" "$action" "$repeats" < /dev/null > /dev/null ) &
+                    do_exit 0
+                fi
+            fi
         fi
     done
 
@@ -75,6 +91,7 @@ add_sbin2path
 # get args
 iface="$1"
 action="$2"
+repeats="$3"
 itype=""
 
 case "$action" in
@@ -85,7 +102,6 @@ case "$action" in
             echo_env
             do_exit 0
         fi
-
         #  quit for virtual interfaces (up action)
         if [ "$action" = "up" ] && readlink "$NETD/${iface}" | grep -q '/virtual/'; then
             # save type for down action where $NETD/$iface won't be there anymore
@@ -106,7 +122,7 @@ case "$action" in
             fi
         fi
 
-        echo_debug "nm" "+++ tlp_rdw_nm($iface).$action"
+        echo_debug "nm" "+++ tlp_rdw_nm($iface).$action: repeats=$repeats"
         echo_env
         # shellcheck disable=SC2154
         if [ -n "$_addpath" ]; then

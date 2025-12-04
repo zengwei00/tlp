@@ -2,7 +2,7 @@
 # 05-thinkpad - Battery Plugin for ThinkPads w/ thinkpad_acpi driver
 # providing thresholds and forced discharge, i.e. X220/T420 and newer.
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Needs: tlp-func-base, 35-tlp-func-batt, tlp-func-stat
@@ -209,6 +209,7 @@ batdrv_init () {
                 if [ -f "$bd/$_bn_dischg" ]; then
                     if grep -q "force-discharge" "$bd/$_bn_dischg"; then
                         # sysfile exists and flags the force-discharge capability
+                        # note: coreboot does not support force-discharge i.e. charge_behaviour = "[auto]"
                         _natacpi=0
                         _bm_dischg="natacpi"
                     fi
@@ -269,21 +270,21 @@ batdrv_select_battery () {
     # retval: $_bat_str:    BAT0/BAT1;
     #         $_bt_cfg_bat: config suffix = BAT0/BAT1;
     #         $_bat_idx:    1/2;
-    #         $_bd_read:    directory with battery data sysfiles;
+    #         $_bd_read:    directory with battery data sysfiles (for tlp-stat);
+    #         $_bd_reada:   directory with battery data sysfiles (ACPI);
     #         $_bf_start:   sysfile for start threshold;
     #         $_bf_stop:    sysfile for stop threshold;
     #         $_bf_dischg:  sysfile for force discharge;
-    #         $_bf_status:  sysfile for status read
     # prerequisite: batdrv_init()
 
     # defaults
     _bat_idx=0    # no index
     _bat_str=""   # no bat
     _bd_read=""   # no directories
+    _bd_reada=""
     _bf_start=""
     _bf_stop=""
     _bf_dischg=""
-    _bf_status=""
     _bt_cfg_bat=""
 
     local bat="$1"
@@ -340,15 +341,21 @@ batdrv_select_battery () {
 
     if [ "$_bm_dischg" = "natacpi" ]; then
         _bf_dischg="$ACPIBATDIR/$bs/$_bn_dischg"
-        _bf_status="$ACPIBATDIR/$bs/status"
     fi
 
     case "$_bm_read" in
-        natacpi) _bd_read="$ACPIBATDIR/$bs" ;;
-        tpsmapi) _bd_read="$SMAPIBATDIR/$bs" ;;
+        natacpi)
+            _bd_read="$ACPIBATDIR/$bs"
+            _bd_reada="$ACPIBATDIR/$bs"
+            ;;
+
+        tpsmapi)
+           _bd_read="$SMAPIBATDIR/$bs"
+           _bd_reada="$ACPIBATDIR/$bs"
+            ;;
     esac
 
-    echo_debug "bat" "batdrv.${_batdrv_plugin}.select_battery($1): bat_str=$_bat_str; cfg=$_bt_cfg_bat; bat_idx=$_bat_idx; bd_read=$_bd_read; bf_start=$_bf_start; bf_stop=$_bf_stop; bf_dischg=$_bf_dischg"
+    echo_debug "bat" "batdrv.${_batdrv_plugin}.select_battery($1): bat_str=$_bat_str; cfg=$_bt_cfg_bat; bat_idx=$_bat_idx; bd_read=$_bd_read; bd_reada=$_bd_reada; bf_start=$_bf_start; bf_stop=$_bf_stop; bf_dischg=$_bf_dischg"
     return 0
 }
 
@@ -365,7 +372,7 @@ batdrv_read_threshold () {
 
     local bf out="" rc=0
 
-    case $1 in
+    case "$1" in
         start) out="$X_THRESH_SIMULATE_START" ;;
         stop)  out="$X_THRESH_SIMULATE_STOP"  ;;
     esac
@@ -378,7 +385,7 @@ batdrv_read_threshold () {
     case $_bm_thresh in
         natacpi)
             # read threshold from sysfile
-            case $1 in
+            case "$1" in
                 start) bf=$_bf_start ;;
                 stop)  bf=$_bf_stop  ;;
             esac
@@ -439,9 +446,9 @@ batdrv_write_thresholds () {
     #     4=threshold read error/
     #     5=threshold write error
     # prerequisite: batdrv_init(), batdrv_select_battery()
-    local new_start=${1:-}
-    local new_stop=${2:-}
-    local verb=${3:-0}
+    local new_start="${1:-}"
+    local new_stop="${2:-}"
+    local verb="${3:-0}"
     local old_start old_stop
 
     # insert defaults
@@ -473,7 +480,7 @@ batdrv_write_thresholds () {
                 if [ -n "$4" ]; then
                     cprintf "" "Error in configuration at START_CHARGE_THRESH_%s=\"%s\": not specified, invalid or out of range (0..99). Aborted.\n" "$_bt_cfg_bat" "$new_start" 1>&2
                 else
-                    cprintf "" "Error: start charge threshold (%s) for %s is not specified, invalid or out of range (0..99). Aborted.\n" "$new_start" "$_bat_str" 1>&2
+                    cprintf "" "Error: start charge threshold (%s) for battery %s is not specified, invalid or out of range (0..99). Aborted.\n" "$new_start" "$_bat_str" 1>&2
                 fi
                 ;;
         esac
@@ -496,7 +503,7 @@ batdrv_write_thresholds () {
                 if [ -n "$4" ]; then
                     cprintf "" "Error in configuration at STOP_CHARGE_THRESH_%s=\"%s\": not specified, invalid or out of range (1..100). Aborted.\n" "$_bt_cfg_bat" "$new_stop" 1>&2
                 else
-                    cprintf "" "Error: stop charge threshold (%s) for %s is not specified, invalid or out of range (1..100). Aborted.\n" "$new_stop" "$_bat_str" 1>&2
+                    cprintf "" "Error: stop charge threshold (%s) for battery %s is not specified, invalid or out of range (1..100). Aborted.\n" "$new_stop" "$_bat_str" 1>&2
                 fi
                 ;;
         esac
@@ -517,7 +524,7 @@ batdrv_write_thresholds () {
                 if [ -n "$4" ]; then
                     cprintf "" "Error in configuration: START_CHARGE_THRESH_%s >= STOP_CHARGE_THRESH_%s. Aborted.\n" "$_bt_cfg_bat" "$_bt_cfg_bat" 1>&2
                 else
-                    cprintf "" "Error: start threshold >= stop threshold for %s. Aborted.\n" "$_bat_str" 1>&2
+                    cprintf "" "Error: start threshold >= stop threshold for battery %s. Aborted.\n" "$_bat_str" 1>&2
                 fi
                 ;;
         esac
@@ -529,8 +536,8 @@ batdrv_write_thresholds () {
        ! old_stop=$(batdrv_read_threshold stop 0); then
         echo_debug "bat" "batdrv.${_batdrv_plugin}.write_thresholds($1, $2, $3, $4).read_error: bat=$_bat_str; cfg=$_bt_cfg_bat"
         case $verb in
-            1) echo_message "Warning: could not read current charge threshold(s) for $_bat_str. Battery skipped." ;;
-            2) cprintf "" "Error: could not read current charge threshold(s) for %s. Aborted.\n" "$_bat_str" 1>&2 ;;
+            1) echo_message "Warning: could not read current charge threshold(s) for battery $_bat_str. Battery skipped." ;;
+            2) cprintf "" "Error: could not read current charge threshold(s) for battery %s. Aborted.\n" "$_bat_str" 1>&2 ;;
         esac
         return 4
     fi
@@ -555,7 +562,7 @@ batdrv_write_thresholds () {
 
     # write new thresholds in determined sequence
     if [ "$verb" = "2" ]; then
-        printf "Setting temporary charge thresholds for %s:\n" "$_bat_str" 1>&2
+        printf "Setting temporary charge thresholds for battery %s:\n" "$_bat_str" 1>&2
     fi
 
     for step in $tseq; do
@@ -595,7 +602,7 @@ batdrv_write_thresholds () {
                     ;;
                 1)
                     if [ $steprc -gt 0 ]; then
-                        echo_message "Error: writing $step charge threshold for $_bat_str failed."
+                        echo_message "Error: writing $step charge threshold for battery $_bat_str failed."
                     fi
                     ;;
             esac
@@ -616,69 +623,86 @@ batdrv_write_thresholds () {
     return $rc
 }
 
+batdrv_calc_soc () {
+    # calc and print battery charge level (rounded)
+    # $1: format (optional)
+    # global param: $_bd_read
+    # prerequisite: batdrv_init(), batdrv_select_battery()
+    # rc: 0=ok/1=charge level read error
+    local ef en
+
+    if [ -f "$_bd_read/energy_full" ]; then
+        # vendor BIOS
+        ef=$(read_sysval "$_bd_read/energy_full")
+        en=$(read_sysval "$_bd_read/energy_now")
+    elif [ -f "$_bd_read/charge_full" ]; then
+        # coreboot
+        ef=$(read_sysval "$_bd_read/charge_full")
+        en=$(read_sysval "$_bd_read/charge_now")
+    else
+        ef=0
+        en=0
+    fi
+
+    if [ "$ef" != "0" ]; then
+        if [ -n "$1" ]; then
+            perl -e 'printf ("'"$1"'", 100.0 * '"$en"' / '"$ef"')'
+        else
+            perl -e 'printf ("%d", int(100.0 * '"$en"' / '"$ef"' + 0.5))'
+        fi
+        return 0
+    else
+        printf "255"
+        return 1
+    fi
+}
+
 batdrv_chargeonce () {
     # charge battery to stop threshold once
     # use pre-determined method and sysfiles from global parms
     # global params: $_batdrv_plugin, $_bm_thresh, $_bat_str, $_bat_idx, $_bf_start, $_bf_stop
     # rc: 0=ok/
-    #     2=charge level read error
+    #     2=charge level read error/
     #     3=charge level too high/
     #     4=threshold read error/
     #     5=threshold write error/
     # prerequisite: batdrv_init(), batdrv_select_battery()
 
-    local ccharge cur_stop efull enow temp_start
+    local soc cur_stop temp_start
     local rc=0
 
     if ! cur_stop=$(batdrv_read_threshold stop 0); then
-        cprintf "" "Error: reading stop charge threshold for %s failed. Aborted.\n" "$_bat_str" 1>&2
+        cprintf "" "Error: reading stop charge threshold of battery %s failed. Aborted.\n" "$_bat_str" 1>&2
         echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str).thresh_unknown: stop=$cur_stop; rc=4"
         return 4
     fi
 
     # get current charge level (in %)
-    case $_bm_read in
-        natacpi) # use ACPI sysfiles
-            if [ -f "$_bd_read/energy_full" ]; then
-                efull=$(read_sysval "$_bd_read/energy_full")
-                enow=$(read_sysval "$_bd_read/energy_now")
-            fi
-
-            if is_uint "$enow" && is_uint "$efull" && [ "$efull" -ne 0 ]; then
-                # calculate charge level rounded to integer
-                ccharge=$(perl -e 'printf("%.0f\n", 100.0 * '"$enow"' / '"$efull"')')
-            else
-                ccharge=-1
-            fi
-            ;;
-
-        tpsmapi) # use tp-smapi sysfile
-            ccharge=$(read_sysval "$_bd_read/remaining_percent") || ccharge=-1
-            ;;
-    esac
-
-    if [ "$ccharge" -eq -1 ]; then
-        cprintf "" "Error: cannot determine charge level for %s.\n" "$_bat_str" 1>&2
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str).charge_level_unknown: enow=$enow; efull=$efull; rc=2"
+    if ! soc="$(batdrv_calc_soc)"; then
+        cprintf "" "Error: cannot determine charge level of battery %s.\n" "$_bat_str" 1>&2
+        echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str).charge_level_unknown; rc=2"
         return 2
     fi
 
     temp_start=$(( cur_stop - 1 ))
-    if [ "$ccharge" -gt "$temp_start" ]; then
-        cprintf "" "Error: the %s charge level is %s%%. " "$_bat_str" "$ccharge"  1>&2
-        cprintf "err" "For this command to work, it must not exceed %s%% (stop threshold - 1).\n" "$temp_start" 1>&2
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str).charge_level_too_high: soc=$ccharge; stop=$cur_stop; rc=3"
+    if [ "$soc" -gt "$temp_start" ]; then
+        cprintf "" "Error: the charge level of battery %s is %s%%. " "$_bat_str" "$soc"  1>&2
+        cprintf "err" "For this command to work, it must not be higher than %s%% (stop threshold - 1).\n" "$temp_start" 1>&2
+        echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str).charge_level_too_high: soc=$soc; stop=$cur_stop; rc=3"
         return 3
     fi
 
-    printf "Setting temporary charge threshold for %s:\n" "$_bat_str" 1>&2
+    printf "Current charge level of battery %s is %s%%, we are about to charge to %s%%.\n" "$_bat_str" "$soc" "$cur_stop" 1>&2
+    printf "Setting temporary charge threshold for battery %s:\n" "$_bat_str" 1>&2
     write_sysf "$temp_start" "$_bf_start" || rc=5
     if [ $rc -eq 0 ]; then
         printf "  start = %3d\n" "$temp_start" 1>&2
+        cprintf "notice" "Charging start now, keep the charger connected.\n"  1>&2
+        printf "If charging does not start immediately, unplug the charger for a moment and reconnect it.\n" 1>&2
     else
         cprintf "err" "  start = %3d (Error: write failed)\n" "$temp_start" 1>&2
     fi
-    echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str): soc=$ccharge; start=$temp_start; stop=$cur_stop; rc=$rc"
+    echo_debug "bat" "batdrv.${_batdrv_plugin}.chargeonce($_bat_str): soc=$soc; start=$temp_start; stop=$cur_stop; rc=$rc"
 
     return $rc
 }
@@ -719,6 +743,7 @@ batdrv_read_force_discharge () {
             # read state from sysfile
             if out=$(read_sysf "$_bf_dischg"); then
                 if [ "$1" != "1" ]; then
+                    # api output
                     if echo "$out" | grep -q "\[force-discharge\]"; then
                         out=1
                     else
@@ -727,23 +752,24 @@ batdrv_read_force_discharge () {
                 fi
             else
                 # not readable/non-existent
-                if [ "$1" != "1" ]; then
-                    out=""
-                else
-                    out="(not available)"
-                fi
+                [ "$1" = "1" ] && out="(not available)"
                 rc=4
             fi
             ;;
 
         *) # no discharge api
-            if [ "$1" = "1" ]; then
-                out="(not available)"
-            fi
+            [ "$1" = "1" ] && out="(not available)"
             rc=255
             ;;
     esac
-    printf "%s" "$out"
+
+    # "return" force-discharge
+    if [ "$X_DISCHG_SIMULATE_READERR" != "1" ]; then
+        printf "%s" "$out"
+    else
+        [ "$1" = "1" ] && printf "(not available)\n"
+        rc=4
+    fi
 
     if [ "$rc" -gt 0 ]; then
         # log output in the error case only
@@ -753,7 +779,7 @@ batdrv_read_force_discharge () {
 }
 
 batdrv_write_force_discharge () {
-    # write force discharge state
+    # write force-discharge state
     # $1: 0=off/1=on
     # global params: $_batdrv_plugin, $_bat_str, $_bat_idx, $_bm_dischg, $_bf_dischg
     # rc: 0=done/5=write error/255=no api
@@ -763,7 +789,7 @@ batdrv_write_force_discharge () {
 
     case $_bm_dischg in
         natacpi)
-            # write force_discharge
+            # write force-discharge
             case "$1" in
                 0) write_sysf "auto" "$_bf_dischg" || rc=5 ;;
                 1) write_sysf "force-discharge" "$_bf_dischg" || rc=5 ;;
@@ -789,97 +815,110 @@ batdrv_cancel_force_discharge () {
     echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.cancelled($_bat_str)"
     printf " Cancelled.\n"
 
-    do_exit 0
+    do_exit 5
 }
 
-batdrv_force_discharge_active () { # check if battery is in 'force_discharge' state
-    # global params: $_batdrv_plugin, $_bat_str, $_bm_read, $_bd_read
-    # rc: 0=discharging/1=not discharging/2=AC detached/255=no api
-    # retval: $_bat_en, $_bat_ef, $_bat_fd, $_bat_pwr, $_bat_soc, $_bat_st, $_bat_volt
+batdrv_force_discharge_active () { # check if battery is in 'force-discharge' state
+    # global params: $_batdrv_plugin, $_bat_str, $_bm_read, $_bd_read, $_bat_target_en
+    # rc: 0=discharging/1=not discharging/2=AC detached/4=terminated/6=target soc reached/255=internal error
+    # retval: $_bat_en, $_bat_fd, $_bat_pwr, $_bat_soc, $_bat_st, $_bat_volt, $_bat_dischg_rc
     # prerequisite: batdrv_init(), batdrv_select_battery()
 
-    local rc=0 pn vt
-    _bat_en=0
-    _bat_ef=0
-    _bat_pwr=0
-    _bat_soc=""
-    _bat_st=""
-    _bat_volt=""
+    # battery readings to be returned to caller as retvals (and for trace output)
+    _bat_en="$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_reada/energy_now")"' / 1000.0 );')"
+    _bat_soc="$(batdrv_calc_soc)"
+    _bat_pwr="$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_reada/power_now")"' / 1000.0 );')"
+    _bat_volt="$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_reada/voltage_now")"' / 1000.0 );')"
 
+    _bat_st="$(read_sysf "$_bd_reada/status")"
     _bat_fd="$(batdrv_read_force_discharge 0)"
-    if [ "$_bat_fd" = "0" ]; then
-        # force_discharge is off --> quit
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.reset($_bat_str): fd=$_bat_fd; rc=1"
-        return 1
-    fi
-
-    if ! get_sys_power_supply; then
-        # AC detached --> cancel discharge
-        rc=2
+    if [ "$_bat_en" -le "$_bat_target_en" ]; then
+        # target soc reached
+        _bat_dischg_rc=6
+    elif ! get_sys_power_supply; then
+        # AC detached --> cancel force-discharge
+        _bat_dischg_rc=2
+    elif [ "$_bat_fd" = "0" ]; then
+        # force-discharge is off --> quit
+        _bat_dischg_rc=4
     else
-        # force_discharge is still on, but quirky firmware (e.g. ThinkPad E-series)
-        # may keep force_discharge on --> check battery status too
-        _bat_st=$(read_sysf "$_bf_status")
+        # quirky firmware (e.g. ThinkPad E-series) may keep force-discharge on --> check battery status too
         case "$_bat_st" in
-            [Dd]ischarging) rc=0 ;;
-            *) rc=1 ;;
-        esac
-
-        # battery readings
-        case $_bm_read in
-            natacpi)
-                # determine soc for log entry
-                _bat_en=$(read_sysval "$_bd_read/energy_now")
-                _bat_ef=$(read_sysval "$_bd_read/energy_full")
-                if [ "$_bat_ef" != "0" ]; then
-                   _bat_soc=$(perl -e 'printf ("%d", 100.0 * '"$_bat_en"' / '"$_bat_ef"' );')
-                fi
-                if pn=$(read_sysval "$_bd_read/power_now"); then
-                   _bat_pwr=$(perl -e 'printf ("%d", '"$pn"' / 1000.0 );')
-                fi
-                if vt=$(read_sysval "$_bd_read/voltage_now"); then
-                   _bat_volt=$(perl -e 'printf ("%d", '"$vt"' / 1000.0 );')
-                fi
+            [Ds]ischarging)
+                # battery is discharging
+                _bat_dischg_rc=0
                 ;;
 
-            tpsmapi)
-                # determine soc for log entry
-                _bat_soc=$(read_sysf "$_bd_read/remaining_percent")
-                _bat_pwr=$(read_sysval "$_bd_read/power_avg")
-                _bat_volt=$(read_sysval "$_bd_read/voltage")
-                ;;
-
-            *) # no read api
-                rc=255
+            *)  # battery is not discharging --> cancel force-discharge
+                _bat_dischg_rc=1
                 ;;
         esac
     fi
 
-    if [ "$rc" -gt "0" ]; then
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.not_discharging($_bat_str): fd=$_bat_fd; st=$_bat_st; soc=$_bat_soc; pwr=$_bat_pwr; voltage=$_bat_volt; rc=$rc"
-    else
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.running($_bat_str): fd=$_bat_fd; st=$_bat_st; soc=$_bat_soc; pwr=$_bat_pwr; voltage=$_bat_volt; rc=$rc"
-    fi
-    return $rc
+    case "$_bat_dischg_rc" in
+        0) echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.running($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc" ;;
+        1) echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.not_discharging($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc" ;;
+        2) echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.ac_detached($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc" ;;
+        4) echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.terminated($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc" ;;
+        6) echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.target_soc($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc" ;;
+        *) echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge.int_err($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc" ;;
+    esac
+
+    return $_bat_dischg_rc
+}
+
+batdrv_discharge_safetylock () {
+    # check safety lock - ThinkPads implement force-discharge sanely and do not need a safety lock
+    # $1: discharge/recalibrate
+    # rc: 0=engaged/1=disengaged
+
+    # ThinkPads implement force-discharge sanely and do not need a safety lock
+    return 1
 }
 
 batdrv_discharge () {
     # discharge battery
-    # global params: $_batdrv_plugin, $_bm_dischg, $_bat_str, $_bat_idx, $_bd_read, $_bf_dischg, $_bat_en, $_bat_soc
-    # rc: 0=done/1=malfunction/2=not emptied/3=ac removed/255=no api
+    # $1: target soc 0(default)..99
+    # global params: $_batdrv_plugin, $_bm_dischg, $_bat_str, $_bat_idx, $_bd_read, $_bf_dischg
+    # rc: 0=done/1=malfunction/2=AC detached/3=not emptied/5=cancelled by ^C/6=target soc reached/7=target soc out of bounds/8=force-discharge malfunction/9=charge level read error
     # prerequisite: batdrv_init(), batdrv_select_battery()
+    local ef en soc target_soc wt
 
-    local en ef pn rc soc st vn wt
+    if ! soc="$(batdrv_calc_soc)"; then
+        _bat_dischg_rc=9
+        echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge($_bat_str).charge_level_unknown; rc=$_bat_dischg_rc"
+        cecho "Error: cannot read charge level of battery ${_bat_str}."  1>&2
+        return $_bat_dischg_rc
+    fi
+
+    target_soc="${1:-0}"
+    if is_uint "$target_soc"; then
+        if ! is_within_bounds "$target_soc" 0 99; then
+            echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.target_out_of_bounds($_bat_str): target=$target_soc"
+            cprintf "" "Error: target charge level (%s) for battery %s is out of range (0..99).\n" "$target_soc" "$_bat_str" 1>&2
+            _bat_dischg_rc=7
+            return $_bat_dischg_rc
+        fi
+    fi
+    ef="$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_reada/energy_full")"' / 1000.0 );')"
+    _bat_target_en="$(perl -e 'printf ("%d", '"$ef"' * '"$target_soc"' / 100.0)')"
+    en="$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_reada/energy_now")"' / 1000.0 );')"
+    if [ "$_bat_target_en" -ge "$en" ]; then
+        echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.target_below_soc($_bat_str): target=$target_soc; soc=$soc"
+        cprintf "" "Error: target level (%s%%) is too high compared to the actual charge level (%s%%) of battery %s.\n" "$target_soc" "$soc" "$_bat_str" 1>&2
+        _bat_dischg_rc=7
+        return $_bat_dischg_rc
+    fi
 
     # start discharge
     if ! batdrv_write_force_discharge 1; then
         echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.force_discharge_write_error($_bat_str)"
         cecho "Error: discharge $_bat_str malfunction -- check your hardware (battery, charger)." 1>&2
-        return 1
+        _bat_dischg_rc=8
+        return $_bat_dischg_rc
     fi
 
     trap batdrv_cancel_force_discharge INT # enable ^C hook
-    rc=0; soc=0
 
     # wait for start == while status not "discharging" -- 15.0 sec timeout
     printf "Initiating discharge of battery %s " "$_bat_str" 1>&2
@@ -892,10 +931,10 @@ batdrv_discharge () {
     printf "\n" 1>&2
 
     if batdrv_force_discharge_active; then
-        # discharge initiated sucessfully --> wait for completion == while status "discharging"
+        # discharge initiated successfully --> wait for force-discharge reset by ec or status != "discharging"
         while batdrv_force_discharge_active; do
             clear
-            printf "Currently discharging battery %s:\n" "$_bat_str" 1>&2
+            printf "Currently discharging battery %s to %s%% (%s mWh):\n" "$_bat_str" "$target_soc" "$_bat_target_en" 1>&2
 
             # show current battery state
             if [ -n "$_bat_volt" ]; then
@@ -904,100 +943,71 @@ batdrv_discharge () {
                 printf "voltage            = not available [mV]\n" 1>&2
             fi
 
-            case $_bm_read in
-                natacpi) # use ACPI sysfiles
-                    perl -e 'printf ("remaining capacity = %6d [mWh]\n", '"$_bat_en"' / 1000.0);' 1>&2
-                    if [ -n "$_bat_soc" ]; then
-                        perl -e 'printf ("remaining percent  = %6d [%%]\n", '"$_bat_soc"' );'  1>&2
-                    else
-                        printf "remaining percent  = not available [%%]\n" 1>&2
-                    fi
+            printf "remaining energy   = %6d [mWh]\n" "$_bat_en" 1>&2
+            if soc="$(batdrv_calc_soc "%6.1f")"; then
+                printf "remaining percent  = %6s [%%]\n"  "$soc"  1>&2
+            else
+                printf "remaining percent  = n/a [%%]\n" 1>&2
+            fi
 
-                    if [ "$_bat_pwr" != "0" ]; then
-                        perl -e 'printf ("remaining time     = %6d [min]\n", 0.06 * '"$_bat_en"' / '"$_bat_pwr"');' 1>&2
-                        printf "power              = %6s [mW]\n"  "$_bat_pwr" 1>&2
-                    else
-                        printf "remaining time     = not discharging [min]\n" 1>&2
-                    fi
-                    ;; # natacpi, tpsmapi
-
-                tpsmapi) # use tp-smapi sysfiles
-                    printf "remaining capacity = %6s [mWh]\n" "$(read_sysf "$_bd_read/remaining_capacity")" 1>&2
-                    printf "remaining percent  = %6s [%%]\n"  "$_bat_soc" 1>&2
-                    printf "remaining time     = %6s [min]\n" "$(read_sysf "$_bd_read/remaining_running_time_now")" 1>&2
-                    printf "power              = %6s [mW]\n"  "$_bat_pwr" 1>&2
-                    ;; # tpsmapi
-
-            esac
+            if [ "$_bat_pwr" != "0" ]; then
+                perl -e 'printf ("remaining time     = %6d [min]\n", 60.0 * ('"$_bat_en"' - '"$_bat_target_en"') / '"$_bat_pwr"');' 1>&2
+                printf "power              = %6s [mW]\n"  "$_bat_pwr" 1>&2
+            else
+                printf "remaining time     = not discharging [min]\n" 1>&2
+            fi
 
             printf "status             = %s\n" "$_bat_st" 1>&2
             printf "force-discharge    = %s\n" "$_bat_fd" 1>&2
             echo "Press Ctrl+C to cancel." 1>&2
             sleep 5
         done
-        unlock_tlp tlp_discharge
 
-        # read SOC and more one last time
-        fd="$(batdrv_read_force_discharge 0)"
-        case $_bm_read in
-            natacpi) # use ACPI sysfiles
-                en=$(read_sysval "$_bd_read/energy_now")
-                ef=$(read_sysval "$_bd_read/energy_full")
-                if [ "$ef" != "0" ]; then
-                    soc=$(perl -e 'printf ("%d", 100.0 * '"$en"' / '"$ef"' );')
+        # cancel force-discharge in case the EC has not already done so
+        [ "$(batdrv_read_force_discharge 0)" = "1" ] && batdrv_write_force_discharge 0
+
+        # check exit cause
+        case "$_bat_dischg_rc" in
+            2) # system on battery, AC power removed
+                echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.ac_detached($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc"
+                cecho "Warning: battery $_bat_str discharge has stopped early -- AC/charger removed." 1>&2
+                ;;
+
+            1|4) # discharging stopped(1) or force-discharge reset (4)
+                if [ "$target_soc" -eq 0 ] && [ "$_bat_soc" -gt 1 ]; then
+                    # system on AC, target soc = 0, SOC > 1%, force-discharge ended prematurely
+                    _bat_dischg_rc=3
+                    echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.not_completed($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc"
+                    cecho "Error: battery $_bat_str discharge was aborted early -- check your hardware (battery, charger)." 1>&2
+                elif [ "$target_soc" -gt 0 ]; then
+                    # system on AC, target soc > 0, force-discharge ended prematurely
+                    _bat_dischg_rc=3
+                    echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.not_completed($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc"
+                    cecho "Error: battery $_bat_str discharge was aborted early -- check your hardware (battery, charger)." 1>&2
                 else
-                    soc=0
+                    # battery discharged completely
+                    _bat_dischg_rc=0
+                    echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.complete($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc"
+                    cecho "Done: battery $_bat_str discharge complete." "success"  1>&2
                 fi
+                ;;
 
-                pn=$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_read/power_avg")"' / 1000.0 );')
-                vn=$(perl -e 'printf ("%d", '"$(read_sysval "$_bd_read/voltage_now")"' / 1000.0 );')
-                ;; # natacpi
-
-            tpsmapi) # use tp-smapi sysfiles
-                soc=$(read_sysf "$_bd_read/remaining_percent")
-
-                pn=$(read_sysval "$_bd_read/power_now")
-                vn=$(read_sysval "$_bd_read/voltage")
+            6) # target_soc reached
+                _bat_dischg_rc=0
+                echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.target_soc($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc"
+                cecho "Done: battery $_bat_str discharge complete." "success" 1>&2
                 ;;
         esac
-        st=$(read_sysf "$_bf_status")
-
-        if [ "$soc" -gt 0 ]; then
-            # SOC > 0% = battery not emptied --> determine cause
-            get_sys_power_supply
-            # shellcheck disable=SC2154
-            if [ "$_syspwr" -eq 1 ]; then
-                # system on battery --> AC power removed
-                echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.ac_removed($_bat_str): fd=$fd; st=$st; soc=$soc; pwr=$pn; voltage=$vn"
-                cecho "Warning: battery $_bat_str was not discharged completely -- AC/charger removed." 1>&2
-                rc=3
-            elif [ "$soc" -gt 1 ]; then
-                # system on AC, SOC > 1% --> discharging terminated by unknown reason
-                echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.not_emptied($_bat_str): fd=$fd; st=$st; soc=$soc; pwr=$pn; voltage=$vn"
-                cecho "Error: battery $_bat_str was not discharged completely i.e. terminated by the firmware -- check your hardware (battery, charger)." 1>&2
-                rc=2
-            fi
-        fi
     else
-        # discharge malfunction --> cancel discharge and abort
-        batdrv_write_force_discharge 0
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.init_error($_bat_str): fd=$_bat_fd; st=$_bat_st; soc=$_bat_soc; pwr=$_bat_pwr; voltage=$_bat_volt; rc=$rc"
-
+        # force-discharge init malfunction
+        _bat_dischg_rc=8
+        echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.init_error($_bat_str): fd=$_bat_fd; st=$_bat_st; target=$_bat_target_en; soc=$_bat_soc; en=$_bat_en; pwr=$_bat_pwr; volt=$_bat_volt; rc=$_bat_dischg_rc"
         cecho "Error: discharge $_bat_str malfunction -- check your hardware (battery, charger)." 1>&2
-        rc=1
     fi
 
     trap - INT # remove ^C hook
 
-    # ThinkPad E-series firmware may keep force_discharge active --> cancel it
-    [ "$(batdrv_read_force_discharge 0)" = "1" ] && batdrv_write_force_discharge 0
-
-    if [ $rc -eq 0 ]; then
-        echo 1>&2
-        cecho "Done: battery $_bat_str was completely discharged." "success"  1>&2
-        echo_debug "bat" "batdrv.${_batdrv_plugin}.discharge.complete($_bat_str)"
-    fi
-    return $rc
+    return $_bat_dischg_rc
 }
 
 batdrv_show_battery_data () {
@@ -1006,7 +1016,7 @@ batdrv_show_battery_data () {
     # global params: $_batdrv_plugin, $_batteries, $_batdrv_kmod, $_natacpi, $_tpsmapi,
     #                $_bm_thresh, $_bm_dischg, $_bd_read, $_bf_start, $_bf_stop, $_bf_dischg
     # prerequisite: batdrv_init()
-    local verbose=${1:-0}
+    local verbose="${1:-0}"
 
     printf "+++ Battery Care\n"
     printf "Plugin: %s\n" "$_batdrv_plugin"
@@ -1074,6 +1084,7 @@ batdrv_show_battery_data () {
                 print_battery_cycle_count "$_bd_read/cycle_count" "$(read_sysf "$_bd_read/cycle_count")"
 
                 if [ -f "$_bd_read/energy_full" ]; then
+                    # vendor BIOS
                     printparm "%-59s = ##%6d## [mWh]" "$_bd_read/energy_full_design" "" 000
                     printparm "%-59s = ##%6d## [mWh]" "$_bd_read/energy_full" "" 000
                     printparm "%-59s = ##%6d## [mWh]" "$_bd_read/energy_now" "" 000
@@ -1136,7 +1147,9 @@ batdrv_show_battery_data () {
                 printparm "%-59s = ##%6d## [mWh]" "$_bd_read/design_capacity"
                 printparm "%-59s = ##%6d## [mWh]" "$_bd_read/last_full_capacity"
                 printparm "%-59s = ##%6d## [mWh]" "$_bd_read/remaining_capacity"
-                printparm "%-59s = ##%6d## [%%]" "$_bd_read/remaining_percent"
+                if [ "$verbose" -eq 1 ]; then
+                     printparm "%-59s = ##%6d## [%%]" "$_bd_read/remaining_percent"
+                fi
                 printparm "%-59s = ##%6s## [min]" "$_bd_read/remaining_running_time_now"
                 printparm "%-59s = ##%6s## [min]" "$_bd_read/remaining_charging_time"
                 printparm "%-59s = ##%6d## [mW]" "$_bd_read/power_now"
@@ -1163,7 +1176,7 @@ batdrv_show_battery_data () {
 
         esac # $_bm_read
 
-        # --- show battery features: thresholds, force_discharge
+        # --- show battery features: thresholds, force-discharge
         local lf=0
         if [ "$_bm_thresh" = "natacpi" ]; then
             printf "%-59s = %6s [%%]\n" "$_bf_start" "$(batdrv_read_threshold start 1)"
@@ -1207,13 +1220,13 @@ batdrv_show_battery_data () {
 
 batdrv_check_soc_gt_stop () {
     # check if battery charge level (SOC) is greater than the stop threshold
-    # rc: 0=greater/¹=less or equal (or thresholds not supported)
+    # rc: 0=greater/1=less or equal (or thresholds not supported)
     # global params: $_bm_thresh, $_bat_str
     # prerequisite: batdrv_init(), batdrv_select_battery()
 
     local soc stop
 
-    if [ "$_bm_thresh" = "natacpi" ] && soc=$(read_sysval "$ACPIBATDIR/$_bat_str/capacity"); then
+    if [ "$_bm_thresh" = "natacpi" ] && soc="$(batdrv_calc_soc)"; then
         stop="$(batdrv_read_threshold stop 0)"
         if [ -n "$stop" ] && [ "$soc" -gt "$stop" ]; then
             return 0

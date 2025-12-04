@@ -1,7 +1,7 @@
 #!/bin/sh
 # 55-msi - Battery Plugin for MSI laptops w/ msi_ec driver
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Needs: tlp-func-base, 35-tlp-func-batt, tlp-func-stat
@@ -301,7 +301,7 @@ batdrv_write_thresholds () {
                 if [ -n "$4" ]; then
                     cprintf "" "Error in configuration at STOP_CHARGE_THRESH_%s=\"%s\": not specified, invalid or out of range (10..100). Aborted.\n" "$_bt_cfg_bat" "$new_stop" 1>&2
                 else
-                    cprintf "" "Error: stop charge threshold (%s) for %s is not specified, invalid or out of range (10..100). Aborted.\n" "$new_stop" "$_bat_str" 1>&2
+                    cprintf "" "Error: stop charge threshold (%s) for battery %s is not specified, invalid or out of range (10..100). Aborted.\n" "$new_stop" "$_bat_str" 1>&2
                 fi
                 ;;
         esac
@@ -321,15 +321,15 @@ batdrv_write_thresholds () {
     if ! old_stop=$(batdrv_read_threshold stop 0); then
         echo_debug "bat" "batdrv.${_batdrv_plugin}.write_thresholds($1, $2, $3, $4).read_error: bat=$_bat_str; cfg=$_bt_cfg_bat"
         case $verb in
-            1) echo_message "Error: could not read current stop charge threshold for $_bat_str. Battery skipped." ;;
-            2) cprintf "" "Error: could not read current stop charge threshold for %s. Aborted.\n" "$_bat_str" 1>&2 ;;
+            1) echo_message "Error: could not read current stop charge threshold for battery $_bat_str. Battery skipped." ;;
+            2) cprintf "" "Error: could not read current stop charge threshold for battery %s. Aborted.\n" "$_bat_str" 1>&2 ;;
         esac
         return 4
     fi
 
     # write new thresholds
     if [ "$verb" = "2" ]; then
-        printf "Setting temporary charge thresholds for %s:\n" "$_bat_str" 1>&2
+        printf "Setting temporary charge thresholds for battery %s:\n" "$_bat_str" 1>&2
     fi
 
     local rc=0 steprc
@@ -350,7 +350,7 @@ batdrv_write_thresholds () {
                 ;;
             1)
                 if [ $steprc -gt 0 ]; then
-                    echo_message "Error: writing stop charge threshold for $_bat_str failed."
+                    echo_message "Error: writing stop charge threshold for battery $_bat_str failed."
                 fi
                 ;;
         esac
@@ -378,6 +378,39 @@ batdrv_write_thresholds () {
 
     echo_debug "bat" "batdrv.${_batdrv_plugin}.write_thresholds($1, $2, $3, $4).complete: bat=$_bat_str; cfg=$_bt_cfg_bat; rc=$rc"
     return $rc
+}
+
+# shellcheck disable=SC2120
+batdrv_calc_soc () {
+    # calc and print battery charge level (rounded)
+    # $1: format (optional)
+    # global param: $_bd_read
+    # prerequisite: batdrv_init(), batdrv_select_battery()
+    # rc: 0=ok/1=charge level read error
+    local ef en
+
+    if [ -f "$_bd_read/energy_full" ]; then
+        ef=$(read_sysval "$_bd_read/energy_full")
+        en=$(read_sysval "$_bd_read/energy_now")
+    elif [ -f "$_bd_read/charge_full" ]; then
+        ef=$(read_sysval "$_bd_read/charge_full")
+        en=$(read_sysval "$_bd_read/charge_now")
+    else
+        ef=0
+        en=0
+    fi
+
+    if [ "$ef" != "0" ]; then
+        if [ -n "$1" ]; then
+            perl -e 'printf ("'"$1"'", 100.0 * '"$en"' / '"$ef"')'
+        else
+            perl -e 'printf ("%d", int(100.0 * '"$en"' / '"$ef"' + 0.5))'
+        fi
+        return 0
+    else
+        printf "255"
+        return 1
+    fi
 }
 
 batdrv_chargeonce () {
@@ -442,6 +475,14 @@ batdrv_force_discharge_active () {
 
     echo_debug "bat" "batdrv.${_batdrv_plugin}.force_discharge_active.not_implemented"
     return 255
+}
+
+batdrv_discharge_safetylock () {
+    # check safety lock - force-discharge not implemented for Huawei MateBooks
+    # $1: discharge/recalibrate
+    # rc: 0=engaged/1=disengaged
+
+    return 1
 }
 
 batdrv_discharge () {
@@ -587,7 +628,7 @@ batdrv_check_soc_gt_stop () {
 
     local soc stop
 
-    if [ "$_bm_thresh" = "natacpi" ] && soc=$(read_sysval "$ACPIBATDIR/$_bat_str/capacity"); then
+    if [ "$_bm_thresh" = "natacpi" ] && soc="$(batdrv_calc_soc)"; then
         stop="$(batdrv_read_threshold stop 0)"
         if [ -n "$stop" ] && [ "$soc" -gt "$stop" ]; then
             return 0

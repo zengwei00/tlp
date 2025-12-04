@@ -1,11 +1,15 @@
 #!/bin/sh
 # func-test - Unit Test Helper Functions
 #
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # ----------------------------------------------------------------------------
 # Constants
+
+readonly ANSI_RED="\033[31m"
+readonly ANSI_GREEN="\033[32m"
+readonly ANSI_BLACK="\033[m"
 
 # ----------------------------------------------------------------------------
 # Functions
@@ -25,17 +29,17 @@ test_root () {
     [ "$(id -u)" = "0" ]
 }
 
-check_root () {
-    # show error message and quit when root privilege missing
-    if ! test_root; then
-        echo "Error: missing root privilege." 1>&2
-        exit 42
-    fi
+cache_root_cred () {
+    # cache user credentials before actual testing
+    sudo true
 }
 
-cmd_exists () {
-    # test if command exists -- $1: command
-    command -v "$1" > /dev/null 2>&1
+check_tlp () {
+    # test if tlp installed
+    if [ ! -f /usr/sbin/tlp ]; then
+        printf_msg "Error: %s not installed." "$TLP" 1>&2
+        exit 254
+    fi
 }
 
 read_sysf () {
@@ -132,5 +136,93 @@ on_ac () {
     upower -i /org/freedesktop/UPower/devices/line_power_AC 2> /dev/null | grep -qE 'online:\s+yes'
 }
 
-# ----------------------------------------------------------------------------
-# Variables
+bat_present () {
+    # Check for battery
+    # $1: battery name
+    # rc: 0=present/1=absent
+
+    [ "$(read_sysf "/sys/class/power_supply/$1/present")" = "1" ]
+}
+
+run_clitest () {
+    # Run clitest script and record result line to file
+    # $1: script filepath
+    # $2: suffix
+    # global param: $_report_file
+
+    if [ -f "$_report_file" ]; then
+        printf "%-50s --> " "${1##*/} $2" >> "$_report_file"
+        clitest --color always "$1" | tee /dev/fd/2 | grep -E '(OK|FAIL):' >> "$_report_file"
+    else
+        clitest --color always "$1" 1>&2
+    fi
+    printf "\n" 1>&2
+}
+
+is_uint () { # check for unsigned integer -- $1: string
+    printf "%s" "$1" | grep -E -q "^[0-9]+$" 2> /dev/null
+}
+
+start_report () {
+    # Create report file
+    # retval: $_report_file, $_nest_level
+
+    if [ -z "$_report_file" ]; then
+        # first call -> create report temp file
+        if ! _report_file="$(mktemp --tmpdir "tlp-test-report.XXX")"; then
+            printf "Error: failed to create report file.\n" 1>&2
+        fi
+        export _report_file
+        export _nest_level=0
+    else
+        # increment level
+        if is_uint "$_nest_level"; then
+            export _nest_level="$((_nest_level + 1))"
+        else
+            export _nest_level=1
+        fi
+    fi
+}
+
+report_test () {
+    # Write test name to report
+    if [ -f "$_report_file" ]; then
+        printf "%-50s --> " "$1" >> "$_report_file"
+    fi
+}
+
+report_line () {
+    # Write text line to report
+    # $1: text
+    if [ -f "$_report_file" ]; then
+        # note: use output string in format for proper ansi esc sequence interpolation
+        # shellcheck disable=SC2059
+        printf "$1\n"  >> "$_report_file"
+    fi
+}
+
+report_result () {
+    # Write test result to terminal and report
+    # $1: # of tests
+    # $2: # of errors
+    if [ "$2" -eq 0 ]; then
+        printf_msg "${ANSI_GREEN}OK:${ANSI_BLACK} %s of %s tests passed\n\n" "$1" "$1"
+        report_line "${ANSI_GREEN}OK:${ANSI_BLACK} $1 of $1 tests passed"
+    else
+        printf_msg "${ANSI_RED}FAIL:${ANSI_BLACK} %s of %s tests failed\n\n" "$2" "$1"
+        report_line "${ANSI_RED}FAIL:${ANSI_BLACK} $2 of $1 tests failed"
+    fi
+}
+
+print_report () {
+    [ "$_nest_level" -gt 0 ] && return
+
+    if [ -f "$_report_file" ]; then
+        printf "+++ Test Summary ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
+        cat "$_report_file"
+        printf "\n"
+        rm -f "$_report_file"
+    else
+        printf "Error: missing report file ''%s''.\n" "$_report_file" 1>&2
+    fi
+}

@@ -12,10 +12,8 @@ Package: tlp
 Architecture: all
 Depends: hdparm, iw, pciutils, rfkill, usbutils, ${misc:Depends}
 Recommends: tlp-rdw, ethtool
-Provides: laptop-mode-tools
 Suggests: tp-smapi-dkms, smartmontools, ${dist:Suggests}
 Conflicts: laptop-mode-tools, power-profiles-daemon, tuned
-Replaces: laptop-mode-tools
 Description: Optimize laptop battery life
  TLP is a feature-rich command-line utility, saving laptop battery power
  without the need to delve deeper into technical details.

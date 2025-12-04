@@ -1,5 +1,5 @@
 # Makefile for TLP
-# Copyright (c) 2024 Thomas Koch <linrunner at gmx.net> and others.
+# Copyright (c) 2025 Thomas Koch <linrunner at gmx.net> and others.
 # SPDX-License-Identifier: GPL-2.0-or-later
 TLPVER := $(shell read _ver _dummy < ./VERSION; printf '%s' "$${_ver:-undef}")
 
@@ -121,7 +121,7 @@ SHFILES = \
 
 UTSHFILES = \
 	unit-tests/test-func \
-	unit-tests/test-cpufreq.sh
+	unit-tests/test-*.sh
 
 PLFILES = \
 	tlp-pcilist \
@@ -328,7 +328,7 @@ bat.d/TEMPLATE~: bat.d/TEMPLATE
 
 bat.d/%~: bat.d/%
 	@printf "*** checkbatdrv %-25s ***********************************************\n" "$<"
-	@awk '/^batdrv_[a-z_]+ ()/ { print $$1; }' $< | grep -v 'batdrv_is' | sort > $@
+	@awk '/^batdrv_[a-z_]+ ()/ { print $$1; }' $< | grep -v -E 'batdrv_(is|has)' | sort > $@
 	@diff -U 1 -s bat.d/TEMPLATE~  $@ || true
 
 checkbatdrv: bat.d/TEMPLATE~ $(BATDRVFILES)
