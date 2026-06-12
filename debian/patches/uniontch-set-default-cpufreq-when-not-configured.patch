@@ -1,0 +1,150 @@
+Index: TLP/func.d/10-tlp-func-cpu
+===================================================================
+--- TLP.orig/func.d/10-tlp-func-cpu
++++ TLP/func.d/10-tlp-func-cpu
+@@ -170,12 +170,13 @@ set_ondemand_global_sampling_down_factor
+     return 0
+ }
+ 
+-set_cpu_scaling_min_max_freq () {
+-    # set CPU scaling limits -- $1: 0=ac mode, 1=battery mode
+-    local minfreq maxfreq cpu ec conf_minfreq conf_maxfreq
+-    local conf=0
++set_cpu_scaling_min_max_freq() {
++    # $1: 0 = AC mode, 1 = battery mode
++    local mode="$1"
++    local conf_minfreq conf_maxfreq
+ 
+-    if [ "$1" = "1" ]; then
++    # Load configuration based on power mode
++    if [ "$mode" = "1" ]; then
+         conf_minfreq=${CPU_SCALING_MIN_FREQ_ON_BAT:-}
+         conf_maxfreq=${CPU_SCALING_MAX_FREQ_ON_BAT:-}
+     else
+@@ -183,58 +184,79 @@ set_cpu_scaling_min_max_freq () {
+         conf_maxfreq=${CPU_SCALING_MAX_FREQ_ON_AC:-}
+     fi
+ 
+-    if [ -n "$conf_minfreq" ] && [ "$conf_minfreq" != "0" ]; then
+-        conf=1
+-        ec=0
+-	#set min freq
+-        for cpu in "${CPUD}"/cpu*/cpufreq/; do
+-	    #update conf min freq
+-            minfreq=$conf_minfreq
+-	    #judge min freq
+-	    if [ -f "${cpu}/cpuinfo_min_freq" ];then
+-	    	actual_min_freq=$(cat "${cpu}/cpuinfo_min_freq")
+-		if [ $minfreq -lt $actual_min_freq ];then
+-                    minfreq=$actual_min_freq
+-                    echo_debug "pm" "set min freq is:$minfreq"
+-            	fi
+-	    fi
+-
+-	    write_min_freq="${cpu}/scaling_min_freq"
+-
+-            if [ -f "${write_min_freq}" ] && ! write_sysf "$minfreq" "${write_min_freq}"; then
+-                echo_debug "pm" "set_cpu_scaling_min_max_freq($1).min.write_error: ${write_min_freq} $minfreq; rc=$?"
+-                ec=$((ec+1))
++    # Helper function to set min or max frequency limit
++    _set_freq_limit() {
++        local limit_type="$1"        # "min" or "max"
++        local config_val="$2"        # user-provided value (may be empty)
++        local hw_info_file="$3"      # e.g., cpuinfo_min_freq
++        local scaling_file="$4"      # e.g., scaling_min_freq
++        local freq hw_limit
++
++        # Determine target frequency
++        if [ -z "$config_val" ] || [ "$config_val" = "0" ]; then
++            # No user config: use hardware default if available
++            if [ -f "$hw_info_file" ]; then
++                freq=$(cat "$hw_info_file")
++                echo_debug "pm" "set_cpu_scaling_min_max_freq($mode).$limit_type: no config, using hardware default: $freq"
++            else
++                # Cannot determine frequency – skip
++                return 1
+             fi
+-        done
+-        echo_debug "pm" "set_cpu_scaling_min_max_freq($1).min: $minfreq; ec=$ec"
+-    fi
++        else
++            freq="$config_val"
++            # Clamp to hardware limits if info is available
++            if [ -f "$hw_info_file" ]; then
++                hw_limit=$(cat "$hw_info_file")
++                if [ "$limit_type" = "min" ] && [ "$freq" -lt "$hw_limit" ]; then
++                    freq="$hw_limit"
++                    echo_debug "pm" "set_cpu_scaling_min_max_freq($mode).$limit_type: clamped to hardware minimum: $freq"
++                elif [ "$limit_type" = "max" ] && [ "$freq" -gt "$hw_limit" ]; then
++                    freq="$hw_limit"
++                    echo_debug "pm" "set_cpu_scaling_min_max_freq($mode).$limit_type: clamped to hardware maximum: $freq"
++                fi
++            fi
++        fi
+ 
+-    #set max freq
+-    if [ -n "$conf_maxfreq" ] && [ "$conf_maxfreq" != "0" ]; then
+-        conf=1
+-        ec=0
+-        for cpu in "${CPUD}"/cpu*/cpufreq/; do
+-            #update conf maxfreq
+-            maxfreq=$conf_maxfreq
+-	    #judge max freq
+-	    if [ -f "${cpu}/cpuinfo_max_freq" ];then
+-	    	actual_max_freq=$(cat "${cpu}/cpuinfo_max_freq")
+-		if [ $maxfreq -gt $actual_max_freq ];then
+-	           maxfreq=$actual_max_freq
+-    		   echo_debug "pm" "set max freq is:$maxfreq"
+-    	    	fi
+-	    fi
+-
+-	    write_max_freq="${cpu}/scaling_max_freq"
+-            if [ -f "${write_max_freq}" ] && ! write_sysf "$maxfreq" "${write_max_freq}"; then
+-                echo_debug "pm" "set_cpu_scaling_min_max_freq($1).max.write_error: $write_max_freq $maxfreq; rc=$?"
+-                ec=$((ec+1))
++        # Write to sysfs if the target file exists
++        if [ -f "$scaling_file" ]; then
++            if ! write_sysf "$freq" "$scaling_file"; then
++                echo_debug "pm" "set_cpu_scaling_min_max_freq($mode).$limit_type.write_error: $scaling_file $freq; rc=$?"
++                return 1
+             fi
+-        done
+-        echo_debug "pm" "set_cpu_scaling_min_max_freq($1).max: $maxfreq; ec=$ec"
++        fi
++
++        return 0
++    }
++
++    local any_action=0
++
++    # Iterate over all online CPUs
++    for cpu in "${CPUD}"/cpu*/cpufreq/; do
++        [ -d "$cpu" ] || continue
++
++        local min_done=0 max_done=0
++
++        # Set minimum frequency
++        if _set_freq_limit "min" "$conf_minfreq" "${cpu}/cpuinfo_min_freq" "${cpu}/scaling_min_freq"; then
++            min_done=1
++        fi
++
++        # Set maximum frequency
++        if _set_freq_limit "max" "$conf_maxfreq" "${cpu}/cpuinfo_max_freq" "${cpu}/scaling_max_freq"; then
++            max_done=1
++        fi
++
++        # Mark that at least one CPU had some action
++        if [ $min_done -eq 1 ] || [ $max_done -eq 1 ]; then
++            any_action=1
++        fi
++    done
++
++    # Log final status
++    if [ $any_action -eq 0 ]; then
++        echo_debug "pm" "set_cpu_scaling_min_max_freq($mode): not configured (no user settings and no hardware defaults found)"
+     fi
+ 
+-    [ $conf -eq 1 ] || echo_debug "pm" "set_cpu_scaling_min_max_freq($1).not_configured"
+     return 0
+ }
+ 

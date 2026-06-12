@@ -1,1 +1,4 @@
 uniontech-deepin-system-power-control.patch
+uniontech-shield-the-tlp-service-error-report.patch
+uniontech-deepin-specific-func-customizations.patch
+uniontch-set-default-cpufreq-when-not-configured.patch

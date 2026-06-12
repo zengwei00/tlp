@@ -4,9 +4,9 @@ Date: Fri, 13 Jun 2025 16:43:46 +0800
 Subject: [PATCH] test
 
 ---
- Makefile                |  7 ++++++
+ Makefile                |  6 ------
  defaults.conf           |  4 ++--
- func.d/10-tlp-func-cpu  | 53 +++++++++++++++++++++++++++++++----------
+ func.d/10-tlp-func-cpu  | 53 +++++++++++++++++++++++++++++++--------
  func.d/15-tlp-func-disk | 14 +++++++++++
  tlp.in                  |  1 +
  tlp.service.in          |  3 ---
@@ -15,24 +15,8 @@ Subject: [PATCH] test
 Index: tlp/Makefile
 ===================================================================
 --- tlp.orig/Makefile	2025-06-13 16:47:36.173894536 +0800
-+++ tlp/Makefile	2025-09-24 12:29:57.629343863 +0800
-@@ -28,6 +28,7 @@
- TLP_META    ?= /usr/share/metainfo
- TLP_RUN     ?= /run/tlp
- TLP_VAR     ?= /var/lib/tlp
-+TLP_DEEPIN  ?= $(TLP_TLIB)/deepin-system-power-control
- 
- # Catenate DESTDIR to paths
- _SBIN    = $(DESTDIR)$(TLP_SBIN)
-@@ -54,6 +55,7 @@
- _META    = $(DESTDIR)$(TLP_META)
- _RUN     = $(DESTDIR)$(TLP_RUN)
- _VAR     = $(DESTDIR)$(TLP_VAR)
-+_DEEPIN  = $(DESTDIR)$(TLP_DEEPIN)
- 
- SED = sed \
- 	-e "s|@TLPVER@|$(TLPVER)|g" \
-@@ -156,8 +158,6 @@
++++ tlp/Makefile	2025-09-24 12:09:43.000000000 +0800
+@@ -156,8 +156,6 @@
  	install -m 755 tlp-pcilist $(_TLIB)/
  	install -m 755 tlp-readconfs $(_TLIB)/
  	install -m 755 tlp-usblist $(_TLIB)/
@@ -41,7 +25,7 @@ Index: tlp/Makefile
  	[ -f $(_CONFUSR) ] || install -D -m 644 tlp.conf $(_CONFUSR)
  	install -d $(_CONFDIR)
  	install -D -m 644 README.d $(_CONFDIR)/README
-@@ -170,10 +170,6 @@
+@@ -170,10 +168,6 @@
  endif
  ifneq ($(TLP_WITH_SYSTEMD),0)
  	install -D -m 644 tlp.service $(_SYSD)/tlp.service
@@ -52,50 +36,6 @@ Index: tlp/Makefile
  endif
  ifneq ($(TLP_NO_BASHCOMP),1)
  	install -D -m 644 completion/bash/tlp.bash_completion $(_SHCPL)/tlp
-@@ -220,6 +216,12 @@
- 	install -D -m 644 completion/fish/tlp-rdw.fish $(_FISHCPL)/tlp-rdw.fish
- endif
- 
-+install-dspc: all
-+	install -D -m 755 debian/deepin-system-power-control/deepin-system-power-control $(_SBIN)/deepin-system-power-control
-+	install -D -m 755 debian/deepin-system-power-control/00-dspc-base.conf $(_DEEPIN)/00-dspc-base.conf
-+	install -D -m 755 debian/deepin-system-power-control/10-dspc-mode.conf $(_DEEPIN)/10-dspc-mode.conf
-+	install -D -m 755 debian/deepin-system-power-control/20-dspc-override-mode@epp.conf $(_DEEPIN)/20-dspc-override-mode@epp.conf
-+
- install-man-tlp:
- 	# manpages
- 	install -d -m 755 $(_MAN)/man1
-@@ -232,7 +234,7 @@
- 	install -d -m 755 $(_MAN)/man8
- 	cd man-rdw && install -m 644 $(MANFILESRDW8) $(_MAN)/man8/
- 
--install: install-tlp install-rdw
-+install: install-tlp install-rdw install-dspc
- 
- install-man: install-man-tlp install-man-rdw
- 
-@@ -288,6 +290,12 @@
- 	rm -f $(_ZSHCPL)/_tlp-rdw
- 	rm -f $(_FISHCPL)/tlp-rdw.fish
- 
-+unistall-dspc:
-+	rm $(_SBIN)/deepin-system-power-control
-+	rm $(_DEEPIN)/00-dspc-base.conf
-+	rm $(_DEEPIN)/10-dspc-mode.conf
-+	rm $(_DEEPIN)/20-dspc-override-mode@epp.conf
-+
- uninstall-man-tlp:
- 	# manpages
- 	cd $(_MAN)/man1 && rm -f $(MANFILES1)
-@@ -297,7 +305,7 @@
- 	# manpages
- 	cd $(_MAN)/man8 && rm -f $(MANFILESRDW8)
- 
--uninstall: uninstall-tlp uninstall-rdw
-+uninstall: uninstall-tlp uninstall-rdw uninstall-dspc
- 
- uninstall-man: uninstall-man-tlp uninstall-man-rdw
- 
 Index: tlp/defaults.conf
 ===================================================================
 --- tlp.orig/defaults.conf	2025-06-13 16:47:36.173894536 +0800
@@ -133,13 +73,13 @@ Index: tlp/func.d/10-tlp-func-cpu
 --- tlp.orig/func.d/10-tlp-func-cpu	2025-06-13 16:47:36.173894536 +0800
 +++ tlp/func.d/10-tlp-func-cpu	2025-09-24 12:09:43.000000000 +0800
 @@ -125,35 +125,62 @@
- 
+
  set_cpu_scaling_min_max_freq () {
      # set CPU scaling limits -- $1: 0=ac mode, 1=battery mode
 -    local minfreq maxfreq cpu ec
 +    local minfreq maxfreq cpu ec conf_minfreq conf_maxfreq
      local conf=0
- 
+
      if [ "$1" = "1" ]; then
 -        minfreq=${CPU_SCALING_MIN_FREQ_ON_BAT:-}
 -        maxfreq=${CPU_SCALING_MAX_FREQ_ON_BAT:-}
@@ -151,7 +91,7 @@ Index: tlp/func.d/10-tlp-func-cpu
 +        conf_minfreq=${CPU_SCALING_MIN_FREQ_ON_AC:-}
 +        conf_maxfreq=${CPU_SCALING_MAX_FREQ_ON_AC:-}
      fi
- 
+
 -    if [ -n "$minfreq" ] && [ "$minfreq" != "0" ]; then
 +    if [ -n "$conf_minfreq" ] && [ "$conf_minfreq" != "0" ]; then
          conf=1
@@ -181,7 +121,7 @@ Index: tlp/func.d/10-tlp-func-cpu
          done
          echo_debug "pm" "set_cpu_scaling_min_max_freq($1).min: $minfreq; ec=$ec"
      fi
- 
+
 -    if [ -n "$maxfreq" ] && [ "$maxfreq" != "0" ]; then
 +    #set max freq
 +    if [ -n "$conf_maxfreq" ] && [ "$conf_maxfreq" != "0" ]; then
@@ -215,7 +155,7 @@ Index: tlp/func.d/15-tlp-func-disk
 @@ -628,6 +628,20 @@
      return 0
  }
- 
+
 +set_dirty_ratio(){
 +    # $1:0=ac mode,1=battery mode
 +    local ratio_value
@@ -241,8 +181,8 @@ Index: tlp/tlp.in
      set_wifi_power_mode "$1"
      disable_wake_on_lan
      set_sound_power_mode "$1"
-+    set_dirty_ratio "$1"
- 
++     set_dirty_ratio "$1"
+
      return 0
  }
 Index: tlp/tlp.service.in

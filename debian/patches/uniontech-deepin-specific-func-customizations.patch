@@ -1,0 +1,135 @@
+Index: tlp-1.7.0.1/func.d/10-tlp-func-cpu
+===================================================================
+--- tlp-1.7.0.1.orig/func.d/10-tlp-func-cpu
++++ tlp-1.7.0.1/func.d/10-tlp-func-cpu
+@@ -123,6 +123,51 @@ set_cpu_scaling_governor () {
+     return 0
+ }
+ 
++set_ondemand_global_sampling_down_factor () {
++    # set ondemand governor sampling down factor -- $1: 0=ac mode, 1=battery mode
++    local cfg factor ec cpu
++
++    if [ "$1" = "1" ]; then
++        factor=${ONDEMAND_GLOBAL_SAMPLING_DOWN_FACTOR_ON_BAT:-}
++        cfg="ONDEMAND_GLOBAL_SAMPLING_DOWN_FACTOR_ON_BAT"
++    else
++        factor=${ONDEMAND_GLOBAL_SAMPLING_DOWN_FACTOR_ON_AC:-}
++        cfg="ONDEMAND_GLOBAL_SAMPLING_DOWN_FACTOR_ON_AC"
++    fi
++
++    if [ -z "$factor" ]; then
++        echo_debug "pm" "set_ondemand_global_sampling_down_factor($1).not_configured"
++        return 0
++    fi
++
++    # check if ondemand governor is available
++    if ! grep -q ondemand "${CPUD}/cpu0/cpufreq/scaling_governor" 2>/dev/null; then
++        echo_debug "pm" "set_ondemand_global_sampling_down_factor($1).ondemand_not_available"
++        return 0
++    fi
++
++    # apply global sampling down factor
++    ec=0
++
++    if [ -f "${CPUD}/cpufreq/ondemand/global_sampling_down_factor" ]; then
++        if ! write_sysf "$factor" "${CPUD}/cpufreq/ondemand/global_sampling_down_factor"; then
++            echo_debug "pm" "set_ondemand_global_sampling_down_factor($1).write_error: ${CPUD}/cpufreq/ondemand/global_sampling_down_factor $factor; rc=$?"
++            ec=$((ec+1))
++        fi
++    fi
++
++
++    if [ "$ec" -gt 0 ]; then
++        echo_debug "pm" "set_ondemand_global_sampling_down_factor($1).failed: $factor; ec=$ec"
++        echo_message "Error in configuration at ${cfg}=\"${factor}\": failed to set global_sampling_down_factor."
++        return 1
++    else
++        echo_debug "pm" "set_ondemand_global_sampling_down_factor($1): $factor; ec=$ec"
++    fi
++
++    return 0
++}
++
+ set_cpu_scaling_min_max_freq () {
+     # set CPU scaling limits -- $1: 0=ac mode, 1=battery mode
+     local minfreq maxfreq cpu ec conf_minfreq conf_maxfreq
+Index: tlp-1.7.0.1/tlp.in
+===================================================================
+--- tlp-1.7.0.1.orig/tlp.in
++++ tlp-1.7.0.1/tlp.in
+@@ -27,6 +27,7 @@ apply_common_settings () { # apply setti
+     set_cpu_boost_all "$1"
+     set_cpu_dyn_boost "$1"
+     set_cpu_perf_policy "$1"
++    set_ondemand_global_sampling_down_factor "$1"
+     set_nmi_watchdog
+     set_mem_sleep "$1"
+     set_ahci_port_runtime_pm "$1"
+@@ -40,6 +41,7 @@ apply_common_settings () { # apply setti
+     set_intel_gpu_min_max_boost_freq "$1"
+     set_amdgpu_profile "$1"
+     set_abm_level "$1"
++    set_devfreq_governor "$1"
+     set_wifi_power_mode "$1"
+     disable_wake_on_lan
+     set_sound_power_mode "$1"
+Index: tlp-1.7.0.1/func.d/45-tlp-func-gpu
+===================================================================
+--- tlp-1.7.0.1.orig/func.d/45-tlp-func-gpu
++++ tlp-1.7.0.1/func.d/45-tlp-func-gpu
+@@ -257,3 +257,54 @@ set_abm_level () {
+ 
+     return 0
+ }
++
++set_devfreq_governor () {
++    # set devfreq governor -- $1: 0=ac mode, 1=battery mode
++    local governor_param devfreq_path governor_val ec=0
++
++    # Determine which parameter to use based on power source
++    if [ "$1" = "1" ]; then
++        governor_param=${DEVFREQ_GOVERNOR_ON_BAT:-}
++    else
++        governor_param=${DEVFREQ_GOVERNOR_ON_AC:-}
++    fi
++
++    # If no parameter configured, return early
++    if [ -z "$governor_param" ]; then
++        echo_debug "pm" "set_devfreq_governor($1).not_configured"
++        return 0
++    fi
++
++    # Iterate through all devfreq devices with pattern devfreq*
++    for devfreq_path in /sys/class/devfreq/devfreq*/; do
++        # Check if the directory exists and is actually a directory
++        if [ -d "$devfreq_path" ]; then
++            # Check if governor file exists for this device
++            if [ -f "${devfreq_path}governor" ]; then
++                # Check if the requested governor is available for this device
++                if [ -f "${devfreq_path}available_governors" ] &&
++                   grep -qw "$governor_param" "${devfreq_path}available_governors" 2>/dev/null; then
++                    # Apply the governor setting
++                    if ! write_sysf "$governor_param" "${devfreq_path}governor"; then
++                        echo_debug "pm" "set_devfreq_governor($1).write_error: ${devfreq_path}governor $governor_param; rc=$?"
++                        ec=$((ec+1))
++                    else
++                        echo_debug "pm" "set_devfreq_governor($1): applied $governor_param to ${devfreq_path}governor"
++                    fi
++                else
++                    echo_debug "pm" "set_devfreq_governor($1).governor_not_available: $governor_param for ${devfreq_path}"
++                fi
++            else
++                echo_debug "pm" "set_devfreq_governor($1).no_governor_file: ${devfreq_path}governor"
++            fi
++        fi
++    done
++
++    if [ "$ec" -gt 0 ]; then
++        echo_debug "pm" "set_devfreq_governor($1).failed: $governor_param; ec=$ec"
++        echo_message "Error in devfreq governor configuration: failed to set governor(s)."
++        return 1
++    fi
++
++    return 0
++}

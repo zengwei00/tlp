@@ -1,0 +1,13 @@
+Index: TLP/tlp-func-base.in
+===================================================================
+--- TLP.orig/tlp-func-base.in	2025-06-18 14:05:57.000000000 +0800
++++ TLP/tlp-func-base.in	2025-06-18 14:12:48.734998510 +0800
+@@ -303,7 +303,7 @@
+         cnt=0
+         for su in $TLP_SERVICES; do
+             if ! check_service_state "$su" enabled > /dev/null 2>&1 ; then
+-                echo_message "Error: TLP's power saving will not apply on boot because $su is not enabled "`
++                echo_message "Warning: TLP's power saving will not apply on boot because $su is not enabled "`
+                             `"--> Invoke 'systemctl enable $su' to ensure the full functionality of TLP." "err"
+                 echo_message ""
+                 rc=1

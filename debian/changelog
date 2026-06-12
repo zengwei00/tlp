@@ -1,3 +1,10 @@
+tlp (1.7.0.1-deepin4) unstable; urgency=medium
+
+  * deepin: remove deepin-system-power-control support
+    merge v20 patch 
+
+ -- zengwei <zengwei1@uniontech.com>  Fri, 12 Jun 2026 16:46:54 +0800
+
 tlp (1.7.0.1-deepin3) stable; urgency=medium
 
   * deepin: Improve deepin-system-power-control support:
